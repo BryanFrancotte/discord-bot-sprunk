@@ -34,6 +34,12 @@ const configPath = path.join(__dirname, 'config.json');
 const logsPath = path.join(__dirname, 'data', 'ticket-logs.json');
 const missionsPath = path.join(__dirname, 'data', 'missions.json');
 let CONFIG = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+const BOT_TOKEN = process.env.BOT_TOKEN;
+
+if (!BOT_TOKEN) {
+    console.error('❌ Missing BOT_TOKEN in .env');
+    process.exit(1);
+}
 
 if (!fs.existsSync(path.join(__dirname, 'data'))) fs.mkdirSync(path.join(__dirname, 'data'));
 if (!fs.existsSync(missionsPath)) fs.writeFileSync(missionsPath, JSON.stringify({ missions: [] }, null, 2));
@@ -134,7 +140,7 @@ async function registerCommands() {
             .toJSON()
     ];
 
-    const rest = new REST({ version: '10' }).setToken(CONFIG.bot.token);
+    const rest = new REST({ version: '10' }).setToken(BOT_TOKEN);
     try {
         console.log(`🔄 Enregistrement des commandes slash sur GUILD: ${CONFIG.bot.guildId}...`);
 
@@ -577,7 +583,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
 process.on('unhandledRejection', error => { console.error('Unhandled promise rejection:', error); });
 process.on('uncaughtException', error => { console.error('Uncaught exception:', error); });
 
-client.login(CONFIG.bot.token);
+client.login(BOT_TOKEN);
 
 // --- Mission Checker ---
 setInterval(async () => {
