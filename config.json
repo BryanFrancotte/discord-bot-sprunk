@@ -1,0 +1,68 @@
+{
+    "bot": {
+        "token": "MTQ4Nzk2NTQ3MDA3MzE2NDAwOA.GPpB9q.GsqxifmsiIrCEJ2Ypmzxj5HxjwG50bnBHjkpm4",
+        "guildId": "1190099308251451522",
+        "reassignRoleId": "1192209478054055946",
+        "logsChannelId": "1487965846864269402",
+        "missionChannelId": "1465683303389597882",
+        "color": "#00ff11",
+        "footerText": "Sprunk"
+    },
+    "tickets": [
+        {
+            "id": "direction",
+            "label": "🥤 Contacter la direction du Sprunk",
+            "emoji": "🥤",
+            "categoryId": "1493284601286623312",
+            "staffRoleId": "1192209478054055946",
+            "title": "🥤 Sprunk | Direction  ",
+            "description": "Bonjour {user}, un membre de l'équipe **SPRUNK** arrive prochainement.",
+            "details": "Questions générales sur nos produits.",
+            "waitMessage": "Veuillez décrire votre demande en attendant une réponse."
+        },
+        {
+            "id": "distributeur",
+            "label": "🤝 Commander un Distributeur",
+            "emoji": "🤝",
+            "categoryId": "1450854354180378755",
+            "staffRoleId": "1192209478054055946",
+            "title": "🤝 Sprunk | Distributeur",
+            "description": "Bonjour {user},.",
+            "details": "",
+            "waitMessage": "Veuillez décrire votre demande en attendant une réponse."
+        },
+        {
+            "id": "postuler",
+            "label": "💼 Postuler au Sprunk",
+            "emoji": "💼",
+            "categoryId": "1461732976319533272",
+            "staffRoleId": "1192209478054055946",
+            "title": "💼 Postuler",
+            "description": "Bonjour {user},",
+            "details": "",
+            "waitMessage": "Veuillez décrire votre demande en attendant une réponse."
+        },
+        {
+            "id": "réservation",
+            "label": "🍋 Réservation",
+            "emoji": "🍋",
+            "categoryId": "1462981398938914962",
+            "staffRoleId": "1192209478054055946",
+            "title": "🍋 Sprunk | Réservation",
+            "description": "Bonjour {user},",
+            "details": "Quel type de réservation vous souhaitez vous",
+            "waitMessage": "Veuillez nous indiquer votre numéro de commande si disponible."
+        },
+        {
+            "id": "architecture",
+            "emoji": "🔨",
+            "label": "🔨 Architecture",
+            "title": "🔨 Sprunk | Architecture",
+            "categoryId": "1470410372556128296",
+            "staffRoleId": "1192209478054055946",
+            "description": "Bonjour {user},",
+            "details": "Quel type d'Architecture vous souhaitez vous",
+            "waitMessage": "Veuillez nous indiquer votre numéro de commande si disponible."
+        }
+    ]
+}
