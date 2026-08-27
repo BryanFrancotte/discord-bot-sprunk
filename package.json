@@ -1,0 +1,20 @@
+{
+  "name": "sprunk-discord-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bot Discord modulaire pour les tickets, missions et rappels Sprunk.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "check": "node scripts/check-syntax.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=24.17.0"
+  },
+  "dependencies": {
+    "discord.js": "^14.27.0",
+    "dotenv": "^17.4.2"
+  }
+}

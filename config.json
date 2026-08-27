@@ -1,0 +1,90 @@
+{
+  "bot": {
+    "guildId": "1190099308251451522",
+    "logsChannelId": "1487965846864269402",
+    "missionChannelId": "1465683303389597882",
+    "reassignRoleId": "1192209478054055946",
+    "missionNotificationRoleId": "1192209478054055946",
+    "distributorRoleId": "1192209478054055946",
+    "color": "#00ff11",
+    "footerText": "SPRUNK",
+    "clearGlobalCommandsOnStartup": false
+  },
+  "tickets": [
+    {
+        "id": "direction",
+        "label": "🥤 Contacter la direction du Sprunk",
+        "emoji": "🥤",
+        "categoryId": "1493284601286623312",
+        "staffRoleId": "1192209913968066685",
+        "title": "🥤 Sprunk | Direction  ",
+        "description": "Bonjour {user}, un membre de l'équipe **SPRUNK** arrive prochainement.",
+        "details": "Questions générales sur nos produits.",
+        "waitMessage": "Veuillez décrire votre demande en attendant une réponse."
+    },
+    {
+        "id": "distributeur",
+        "label": "🤝 Commander un Distributeur",
+        "emoji": "🤝",
+        "categoryId": "1450854354180378755",
+        "staffRoleId": "1371116556783714394",
+        "title": "🤝 Sprunk | Distributeur",
+        "description": "Bonjour {user},.",
+        "details": "",
+        "waitMessage": "Veuillez décrire votre demande en attendant une réponse."
+    },
+    {
+        "id": "postuler",
+        "label": "💼 Postuler au Sprunk",
+        "emoji": "💼",
+        "categoryId": "1461732976319533272",
+        "staffRoleId": "1371116556783714394",
+        "title": "💼 Postuler",
+        "description": "Bonjour {user},",
+        "details": "",
+        "waitMessage": "Veuillez décrire votre demande en attendant une réponse."
+    },
+    {
+        "id": "réservation",
+        "label": "🍋 Réservation",
+        "emoji": "🍋",
+        "categoryId": "1462981398938914962",
+        "staffRoleId": "1503419444351991818",
+        "title": "🍋 Sprunk | Réservation",
+        "description": "Bonjour {user},",
+        "details": "Quel type de réservation vous souhaitez vous",
+        "waitMessage": "Veuillez décrire votre demande en attendant une réponse."
+    },
+    {
+        "id": "architecture",
+        "emoji": "🔨",
+        "label": "🔨 Architecture",
+        "title": "🔨 Sprunk | Architecture",
+        "categoryId": "1470410372556128296",
+        "staffRoleId": "1315384459843076126",
+        "description": "Bonjour {user},",
+        "details": "Quel type d'Architecture vous souhaitez vous",
+        "waitMessage": "Veuillez décrire votre demande en attendant une réponse."
+    }
+  ],
+  "missions": {
+    "checkIntervalMs": 30000,
+    "retentionHours": 24,
+    "transientMessageDurationMs": 5000
+  },
+  "ticketsSettings": {
+    "transcriptMessageLimit": 1000,
+    "deleteDelayMs": 2000
+  },
+  "troll": {
+    "enabled": false,
+    "messageCount": 15,
+    "delayMs": 800,
+    "cooldownMs": 600000,
+    "gifs": [
+      "https://media.giphy.com/media/amxLHEPgGDCKs/giphy.gif",
+      "https://media.giphy.com/media/3o72F8t9TDi2xTY97G/giphy.gif",
+      "https://media.giphy.com/media/vFKqnCdLPNOKc/giphy.gif"
+    ]
+  }
+}
