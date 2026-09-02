@@ -22,6 +22,10 @@ module.exports = function registerInteractionCreate(client) {
                     await client.services.tickets.showReassignMenu(interaction);
                 } else if (interaction.customId === 'ticket:rename') {
                     await client.services.tickets.showRenameModal(interaction);
+                } else if (interaction.customId === 'ticket:add-user') {
+                    await client.services.tickets.showAddUserMenu(interaction);
+                } else if (interaction.customId === 'ticket:remove-user') {
+                    await client.services.tickets.showRemoveUserMenu(interaction);
                 }
                 return;
             }
@@ -35,8 +39,21 @@ module.exports = function registerInteractionCreate(client) {
                 return;
             }
 
-            if (interaction.isModalSubmit() && interaction.customId === 'ticket:rename-confirm') {
-                await client.services.tickets.renameTicket(interaction);
+            if (interaction.isModalSubmit()) {
+                if (interaction.customId === 'ticket:rename-confirm') {
+                    await client.services.tickets.renameTicket(interaction);
+                } else if (interaction.customId === 'ticket:architecture-confirm') {
+                    await client.services.tickets.createArchitectureTicket(interaction);
+                }
+                return;
+            }
+
+            if (interaction.isUserSelectMenu()) {
+                if (interaction.customId === 'ticket:add-user-confirm') {
+                    await client.services.tickets.addUsersToTicket(interaction, interaction.values);
+                } else if (interaction.customId === 'ticket:remove-user-confirm') {
+                    await client.services.tickets.removeUsersFromTicket(interaction, interaction.values);
+                }
             }
         } catch (error) {
             console.error('❌ Erreur interactionCreate :', error);

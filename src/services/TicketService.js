@@ -12,7 +12,8 @@ const {
     PermissionFlagsBits,
     StringSelectMenuBuilder,
     TextInputBuilder,
-    TextInputStyle
+    TextInputStyle,
+    UserSelectMenuBuilder
 } = require('discord.js');
 const { canManageBot } = require('../utils/permissions');
 const { getDisplayName, sanitizeChannelName } = require('../utils/text');
@@ -87,12 +88,18 @@ class TicketService {
     }
 
     async createTicket(interaction, categoryId) {
-        await interaction.deferUpdate();
-
         const ticketConfig = this.client.config.tickets.find(ticket => ticket.id === categoryId);
         if (!ticketConfig) {
-            return interaction.editReply({ content: '❌ Cette catégorie n’existe plus.', components: [] });
+            await interaction.update({ content: 'Categorie introuvable.', components: [] });
+            return;
         }
+        if (this.needsArchitectureQuestionnaire(ticketConfig)) {
+            await this.showArchitectureQuestionnaire(interaction);
+            return;
+        }
+
+        await interaction.deferUpdate();
+
         if (!isDiscordId(ticketConfig.staffRoleId)) {
             return interaction.editReply({
                 content: '❌ Le rôle staff de cette catégorie est mal configuré.',
@@ -167,7 +174,17 @@ class TicketService {
             new ButtonBuilder()
                 .setCustomId('ticket:rename')
                 .setLabel('Renommer')
-                .setStyle(ButtonStyle.Primary)
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId('ticket:add-user')
+                .setLabel('Ajouter')
+                .setEmoji('➕')
+                .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId('ticket:remove-user')
+                .setLabel('Retirer')
+                .setEmoji('➖')
+                .setStyle(ButtonStyle.Secondary)
         );
 
         await channel.send({
@@ -181,6 +198,157 @@ class TicketService {
         });
 
         await interaction.editReply({ content: `✅ Ticket créé : ${channel}`, components: [] });
+    }
+
+    async showArchitectureQuestionnaire(interaction) {
+        const modal = new ModalBuilder()
+            .setCustomId('ticket:architecture-confirm')
+            .setTitle('Questionnaire Architecture')
+            .addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('architecture-type')
+                        .setLabel('Quel type d architecture souhaitez-vous ?')
+                        .setStyle(TextInputStyle.Short)
+                        .setPlaceholder('Ex : Interieur, Exterieur, Commercial...')
+                        .setRequired(true)
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('architecture-event-date')
+                        .setLabel('Quand est votre evenement ?')
+                        .setStyle(TextInputStyle.Short)
+                        .setPlaceholder('Ex : 15/08/2026 ou Dans 2 semaines')
+                        .setRequired(true)
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('architecture-partners')
+                        .setLabel('Combien de partenaires y a-t-il ?')
+                        .setStyle(TextInputStyle.Short)
+                        .setPlaceholder('Ex : 3')
+                        .setRequired(true)
+                )
+            );
+
+        await interaction.showModal(modal);
+    }
+
+    async createArchitectureTicket(interaction) {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        const ticketConfig = this.client.config.tickets.find(ticket => this.needsArchitectureQuestionnaire(ticket));
+        if (!ticketConfig) {
+            return interaction.editReply('La categorie Architecture n est plus configuree.');
+        }
+        if (!isDiscordId(ticketConfig.staffRoleId)) {
+            return interaction.editReply({
+                content: 'Le role staff de cette categorie est mal configure.',
+                components: []
+            });
+        }
+
+        const displayName = getDisplayName(interaction.member, interaction.user);
+        const channelName = sanitizeChannelName(`ticket-${displayName}-${ticketConfig.id}`);
+        const channel = await interaction.guild.channels.create({
+            name: channelName,
+            type: ChannelType.GuildText,
+            topic: this.buildTopic(interaction.user.id, ticketConfig.id),
+            parent: isDiscordId(ticketConfig.categoryId) ? ticketConfig.categoryId : undefined,
+            permissionOverwrites: [
+                {
+                    id: interaction.guild.id,
+                    deny: [PermissionFlagsBits.ViewChannel]
+                },
+                {
+                    id: interaction.user.id,
+                    allow: OWNER_PERMISSIONS
+                },
+                {
+                    id: ticketConfig.staffRoleId,
+                    allow: STAFF_PERMISSIONS
+                },
+                {
+                    id: this.client.user.id,
+                    allow: [
+                        ...STAFF_PERMISSIONS,
+                        PermissionFlagsBits.ManageChannels
+                    ]
+                }
+            ],
+            reason: `Ticket ouvert par ${interaction.user.tag}`
+        });
+
+        const logEmbed = new EmbedBuilder()
+            .setTitle('TICKET OUVERT')
+            .setColor(this.client.config.bot.color)
+            .setDescription([
+                `Ouvert par : **${displayName}** (${interaction.user.tag})`,
+                `Categorie : **${ticketConfig.label}**`,
+                `Salon : ${channel}`
+            ].join('\n'))
+            .setTimestamp();
+        await this.discordLogService.send(interaction.guild, logEmbed);
+
+        const questionnaire = [
+            ['Type d architecture', interaction.fields.getTextInputValue('architecture-type')],
+            ['Date de l evenement', interaction.fields.getTextInputValue('architecture-event-date')],
+            ['Nombre de partenaires', interaction.fields.getTextInputValue('architecture-partners')]
+        ];
+
+        const ticketEmbed = new EmbedBuilder()
+            .setTitle(ticketConfig.title)
+            .setDescription([
+                ticketConfig.description.replace('{user}', `${interaction.user}`),
+                '',
+                '**Informations :**',
+                `**Utilisateur :** ${displayName}`,
+                '',
+                '**Questionnaire :**',
+                ...questionnaire.map(([label, value]) => `**${label} :** ${value}`)
+            ].join('\n'))
+            .setColor(this.client.config.bot.color);
+
+        const controls = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('ticket:close')
+                .setLabel('Fermer')
+                .setStyle(ButtonStyle.Danger),
+            new ButtonBuilder()
+                .setCustomId('ticket:reassign')
+                .setLabel('Reassigner')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('ticket:rename')
+                .setLabel('Renommer')
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId('ticket:add-user')
+                .setLabel('Ajouter')
+                .setEmoji('➕')
+                .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId('ticket:remove-user')
+                .setLabel('Retirer')
+                .setEmoji('➖')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+        await channel.send({
+            content: `${interaction.user} | <@&${ticketConfig.staffRoleId}>`,
+            embeds: [ticketEmbed],
+            components: [controls],
+            allowedMentions: {
+                users: [interaction.user.id],
+                roles: [ticketConfig.staffRoleId]
+            }
+        });
+
+        await interaction.editReply({ content: `Ticket cree : ${channel}` });
+    }
+
+    needsArchitectureQuestionnaire(ticketConfig) {
+        return ticketConfig?.id?.toLowerCase() === 'architecture';
     }
 
     async closeTicket(interaction) {
@@ -393,6 +561,134 @@ class TicketService {
             ].join('\n'))
             .setTimestamp();
         await this.discordLogService.send(interaction.guild, embed);
+    }
+
+    async showAddUserMenu(interaction) {
+        if (!canManageBot(interaction.member, this.client.config)) {
+            return interaction.reply({ content: 'Non autorise.', flags: MessageFlags.Ephemeral });
+        }
+        if (!this.parseTopic(interaction.channel.topic)) {
+            return interaction.reply({
+                content: 'Ce salon n est pas un ticket gere par le bot.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const row = new ActionRowBuilder().addComponents(
+            new UserSelectMenuBuilder()
+                .setCustomId('ticket:add-user-confirm')
+                .setPlaceholder('Selectionnez un ou plusieurs utilisateurs...')
+                .setMinValues(1)
+                .setMaxValues(5)
+        );
+
+        await interaction.reply({
+            content: 'Choisissez qui ajouter au ticket :',
+            components: [row],
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    async showRemoveUserMenu(interaction) {
+        if (!canManageBot(interaction.member, this.client.config)) {
+            return interaction.reply({ content: 'Non autorise.', flags: MessageFlags.Ephemeral });
+        }
+        if (!this.parseTopic(interaction.channel.topic)) {
+            return interaction.reply({
+                content: 'Ce salon n est pas un ticket gere par le bot.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const row = new ActionRowBuilder().addComponents(
+            new UserSelectMenuBuilder()
+                .setCustomId('ticket:remove-user-confirm')
+                .setPlaceholder('Selectionnez un ou plusieurs utilisateurs...')
+                .setMinValues(1)
+                .setMaxValues(5)
+        );
+
+        await interaction.reply({
+            content: 'Choisissez qui retirer du ticket :',
+            components: [row],
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    async addUsersToTicket(interaction, userIds) {
+        if (!canManageBot(interaction.member, this.client.config)) {
+            return interaction.reply({ content: 'Non autorise.', flags: MessageFlags.Ephemeral });
+        }
+
+        await interaction.deferUpdate();
+        if (!this.parseTopic(interaction.channel.topic)) {
+            return interaction.followUp({
+                content: 'Ce salon n est pas un ticket gere par le bot.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        for (const userId of userIds) {
+            await interaction.channel.permissionOverwrites.edit(userId, {
+                ViewChannel: true,
+                SendMessages: true,
+                AttachFiles: true,
+                ReadMessageHistory: true,
+                EmbedLinks: true
+            });
+        }
+
+        await interaction.channel.send({
+            embeds: [new EmbedBuilder()
+                .setTitle('MEMBRE AJOUTE')
+                .setColor(this.client.config.bot.color)
+                .setDescription(`Les utilisateurs suivants ont ete ajoutes par ${interaction.user} :\n${userIds.map(id => `<@${id}>`).join('\n')}`)
+                .setTimestamp()]
+        });
+        await interaction.followUp({
+            content: 'Utilisateurs ajoutes avec succes.',
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    async removeUsersFromTicket(interaction, userIds) {
+        if (!canManageBot(interaction.member, this.client.config)) {
+            return interaction.reply({ content: 'Non autorise.', flags: MessageFlags.Ephemeral });
+        }
+
+        await interaction.deferUpdate();
+        const metadata = this.parseTopic(interaction.channel.topic);
+        if (!metadata) {
+            return interaction.followUp({
+                content: 'Ce salon n est pas un ticket gere par le bot.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const removableUserIds = userIds.filter(userId => (
+            userId !== metadata.ownerId &&
+            userId !== this.client.user.id
+        ));
+        for (const userId of removableUserIds) {
+            await interaction.channel.permissionOverwrites.delete(userId);
+        }
+
+        if (removableUserIds.length > 0) {
+            await interaction.channel.send({
+                embeds: [new EmbedBuilder()
+                    .setTitle('MEMBRE RETIRE')
+                    .setColor('#e74c3c')
+                    .setDescription(`Les utilisateurs suivants ont ete retires par ${interaction.user} :\n${removableUserIds.map(id => `<@${id}>`).join('\n')}`)
+                    .setTimestamp()]
+            });
+        }
+
+        await interaction.followUp({
+            content: removableUserIds.length > 0
+                ? 'Utilisateurs retires avec succes.'
+                : 'Aucun utilisateur selectionne ne peut etre retire.',
+            flags: MessageFlags.Ephemeral
+        });
     }
 
     buildTopic(ownerId, categoryId) {

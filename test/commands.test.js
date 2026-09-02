@@ -23,3 +23,11 @@ test('les métadonnées d’un ticket peuvent être relues depuis son topic', ()
     });
     assert.equal(service.parseTopic('topic ordinaire'), null);
 });
+
+test('la categorie architecture declenche le questionnaire dedie', () => {
+    const service = new TicketService({}, {}, {});
+
+    assert.equal(service.needsArchitectureQuestionnaire({ id: 'architecture' }), true);
+    assert.equal(service.needsArchitectureQuestionnaire({ id: 'Architecture' }), true);
+    assert.equal(service.needsArchitectureQuestionnaire({ id: 'support' }), false);
+});
