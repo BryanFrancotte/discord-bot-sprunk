@@ -31,3 +31,12 @@ test('la categorie architecture declenche le questionnaire dedie', () => {
     assert.equal(service.needsArchitectureQuestionnaire({ id: 'Architecture' }), true);
     assert.equal(service.needsArchitectureQuestionnaire({ id: 'support' }), false);
 });
+
+test('la previsualisation du transcript reste compatible avec Discord', () => {
+    const service = new TicketService({}, {}, {});
+    const preview = service.buildTranscriptPreview('TRANSCRIPT SPRUNK\n'.repeat(200));
+
+    assert.equal(preview.startsWith('```txt\n'), true);
+    assert.equal(preview.endsWith('\n```'), true);
+    assert.equal(preview.length <= 2000, true);
+});

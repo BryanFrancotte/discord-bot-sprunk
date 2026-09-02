@@ -404,7 +404,7 @@ class TicketService {
                 .setColor(this.client.config.bot.color)
                 .setDescription(`Par **${displayName}**\nSalon : ${channel.name}`)
                 .setTimestamp();
-            await this.discordLogService.send(interaction.guild, logEmbed, attachment);
+            await this.sendClosedTicketLog(interaction.guild, logEmbed, attachment, transcript);
 
             await interaction.editReply('✅ Ticket archivé. Suppression du salon…');
             const deleteDelay = Math.max(0, Number(this.client.config.ticketsSettings?.deleteDelayMs) || 2000);
@@ -730,6 +730,42 @@ class TicketService {
             lines.push(`[${message.createdAt.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })}] ${message.author.tag}: ${content}`);
         }
         return `${lines.join('\n')}\n`;
+    }
+
+    buildTranscriptPreview(transcript) {
+        const prefix = '```txt\n';
+        const suffix = '\n```';
+        const truncation = '\n...';
+        const maxBodyLength = 2000 - prefix.length - suffix.length;
+
+        let body = transcript.trimEnd();
+        if (body.length > maxBodyLength) {
+            body = `${body.slice(0, maxBodyLength - truncation.length)}${truncation}`;
+        }
+
+        return `${prefix}${body}${suffix}`;
+    }
+
+    async sendClosedTicketLog(guild, embed, attachment, transcript) {
+        const channelId = this.client.config.ticketsSettings?.closeLogsChannelId;
+        if (!isDiscordId(channelId)) return false;
+
+        try {
+            const channel = await guild.channels.fetch(channelId).catch(() => null);
+            if (!channel?.isTextBased() || typeof channel.send !== 'function') return false;
+
+            await channel.send({
+                content: this.buildTranscriptPreview(transcript),
+                files: [attachment],
+                embeds: [embed]
+            });
+            return true;
+        } catch (error) {
+            if (![50001, 50013, 10003].includes(error.code)) {
+                console.error('Envoi du log de fermeture impossible :', error.message);
+            }
+            return false;
+        }
     }
 }
 

@@ -74,7 +74,8 @@
   },
   "ticketsSettings": {
     "transcriptMessageLimit": 1000,
-    "deleteDelayMs": 2000
+    "deleteDelayMs": 2000,
+    "closeLogsChannelId": "1544816503915020362"
   },
   "troll": {
     "enabled": false,
