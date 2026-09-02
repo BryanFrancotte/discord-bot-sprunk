@@ -404,7 +404,7 @@ class TicketService {
                 .setColor(this.client.config.bot.color)
                 .setDescription(`Par **${displayName}**\nSalon : ${channel.name}`)
                 .setTimestamp();
-            await this.sendClosedTicketLog(interaction.guild, logEmbed, attachment, transcript);
+            await this.sendClosedTicketLog(interaction.guild, logEmbed, attachment);
 
             await interaction.editReply('✅ Ticket archivé. Suppression du salon…');
             const deleteDelay = Math.max(0, Number(this.client.config.ticketsSettings?.deleteDelayMs) || 2000);
@@ -746,7 +746,7 @@ class TicketService {
         return `${prefix}${body}${suffix}`;
     }
 
-    async sendClosedTicketLog(guild, embed, attachment, transcript) {
+    async sendClosedTicketLog(guild, embed, attachment) {
         const channelId = this.client.config.ticketsSettings?.closeLogsChannelId;
         if (!isDiscordId(channelId)) return false;
 
@@ -755,7 +755,6 @@ class TicketService {
             if (!channel?.isTextBased() || typeof channel.send !== 'function') return false;
 
             await channel.send({
-                content: this.buildTranscriptPreview(transcript),
                 files: [attachment],
                 embeds: [embed]
             });
