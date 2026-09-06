@@ -2,6 +2,11 @@
 
 Base de bot Discord modulaire en JavaScript avec discord.js. Elle reprend les tickets, les missions, les rappels, les réactions, les transcripts, le panel de support, le message distributeur et la commande troll du code d’origine.
 
+Ce README couvre l'installation. Pour aller plus loin :
+
+- [`docs/DEVELOPER_GUIDE.md`](docs/DEVELOPER_GUIDE.md) — architecture, conventions, comment ajouter une commande ou un service.
+- [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) — utilisation des tickets, des missions et des commandes côté staff/membres.
+
 ## Prérequis
 
 - Node.js 24.17.0 ou plus récent, requis par discord.js 14.27.
@@ -51,8 +56,9 @@ Le rôle du bot doit être placé au-dessus des rôles qu’il doit mentionner o
 - `/mission` : crée une mission et programme les rappels à 15 minutes, 5 minutes et au démarrage.
 - `/distributeur` : publie anonymement le message d’information configuré dans le code.
 - `/troll` : envoie une série limitée de messages privés ; désactivée par défaut.
+- `/acquire` : transforme le salon courant (non créé par le bot) en ticket géré, avec toutes les actions d’un ticket normal.
 
-Les commandes de mission, réassignation, renommage et troll sont accessibles aux administrateurs ou au rôle `reassignRoleId`. `/distributeur` accepte également `distributorRoleId`.
+Les commandes de mission, réassignation, renommage, acquisition et troll sont accessibles aux administrateurs ou au rôle `reassignRoleId`. `/distributeur` accepte également `distributorRoleId`.
 
 ## Configuration de `/troll`
 

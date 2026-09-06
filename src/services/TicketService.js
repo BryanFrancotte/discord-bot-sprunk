@@ -107,36 +107,24 @@ class TicketService {
             });
         }
 
+        const { channel, displayName } = await this.createTicketChannel(interaction, ticketConfig);
+        await this.sendTicketChannelMessage(channel, ticketConfig, interaction.user.id, displayName, [
+            `**Détails :** ${ticketConfig.details || 'N/A'}`
+        ]);
+
+        await interaction.editReply({ content: `✅ Ticket créé : ${channel}`, components: [] });
+    }
+
+    async createTicketChannel(interaction, ticketConfig) {
         const displayName = getDisplayName(interaction.member, interaction.user);
         const channelName = sanitizeChannelName(`ticket-${displayName}-${ticketConfig.id}`);
-        const permissionOverwrites = [
-            {
-                id: interaction.guild.id,
-                deny: [PermissionFlagsBits.ViewChannel]
-            },
-            {
-                id: interaction.user.id,
-                allow: OWNER_PERMISSIONS
-            },
-            {
-                id: ticketConfig.staffRoleId,
-                allow: STAFF_PERMISSIONS
-            },
-            {
-                id: this.client.user.id,
-                allow: [
-                    ...STAFF_PERMISSIONS,
-                    PermissionFlagsBits.ManageChannels
-                ]
-            }
-        ];
 
         const channel = await interaction.guild.channels.create({
             name: channelName,
             type: ChannelType.GuildText,
             topic: this.buildTopic(interaction.user.id, ticketConfig.id),
             parent: isDiscordId(ticketConfig.categoryId) ? ticketConfig.categoryId : undefined,
-            permissionOverwrites,
+            permissionOverwrites: this.buildTicketPermissionOverwrites(interaction, ticketConfig),
             reason: `Ticket ouvert par ${interaction.user.tag}`
         });
 
@@ -151,18 +139,35 @@ class TicketService {
             .setTimestamp();
         await this.discordLogService.send(interaction.guild, logEmbed);
 
-        const ticketEmbed = new EmbedBuilder()
-            .setTitle(ticketConfig.title)
-            .setDescription([
-                ticketConfig.description.replace('{user}', `${interaction.user}`),
-                '',
-                '**Informations :**',
-                `**Utilisateur :** ${displayName}`,
-                `**Détails :** ${ticketConfig.details || 'N/A'}`
-            ].join('\n'))
-            .setColor(this.client.config.bot.color);
+        return { channel, displayName };
+    }
 
-        const controls = new ActionRowBuilder().addComponents(
+    buildTicketPermissionOverwrites(interaction, ticketConfig, ownerId = interaction.user.id) {
+        return [
+            {
+                id: interaction.guild.id,
+                deny: [PermissionFlagsBits.ViewChannel]
+            },
+            {
+                id: ownerId,
+                allow: OWNER_PERMISSIONS
+            },
+            {
+                id: ticketConfig.staffRoleId,
+                allow: STAFF_PERMISSIONS
+            },
+            {
+                id: this.client.user.id,
+                allow: [
+                    ...STAFF_PERMISSIONS,
+                    PermissionFlagsBits.ManageChannels
+                ]
+            }
+        ];
+    }
+
+    buildTicketControlsRow() {
+        return new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('ticket:close')
                 .setLabel('Fermer')
@@ -186,18 +191,110 @@ class TicketService {
                 .setEmoji('➖')
                 .setStyle(ButtonStyle.Secondary)
         );
+    }
+
+    async sendTicketChannelMessage(channel, ticketConfig, ownerId, displayName, extraDescriptionLines) {
+        const ownerMention = `<@${ownerId}>`;
+        const ticketEmbed = new EmbedBuilder()
+            .setTitle(ticketConfig.title)
+            .setDescription([
+                ticketConfig.description.replace('{user}', ownerMention),
+                '',
+                '**Informations :**',
+                `**Utilisateur :** ${displayName}`,
+                ...extraDescriptionLines
+            ].join('\n'))
+            .setColor(this.client.config.bot.color);
 
         await channel.send({
-            content: `${interaction.user} | <@&${ticketConfig.staffRoleId}>`,
+            content: `${ownerMention} | <@&${ticketConfig.staffRoleId}>`,
             embeds: [ticketEmbed],
-            components: [controls],
+            components: [this.buildTicketControlsRow()],
             allowedMentions: {
-                users: [interaction.user.id],
+                users: [ownerId],
                 roles: [ticketConfig.staffRoleId]
             }
         });
+    }
 
-        await interaction.editReply({ content: `✅ Ticket créé : ${channel}`, components: [] });
+    async showAcquireCategoryMenu(interaction, ownerId) {
+        const options = this.client.config.tickets.map(ticket => {
+            const option = {
+                label: ticket.label.slice(0, 100),
+                value: ticket.id,
+                description: (ticket.details || 'Cliquez pour acquérir').slice(0, 100)
+            };
+            if (ticket.emoji?.trim()) option.emoji = ticket.emoji.trim();
+            return option;
+        });
+
+        const row = new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId(`ticket:acquire-confirm:${ownerId}`)
+                .setPlaceholder('Sélectionnez une catégorie…')
+                .addOptions(options)
+        );
+
+        await interaction.editReply({
+            content: `Choisissez la catégorie du ticket pour <@${ownerId}> :`,
+            components: [row]
+        });
+    }
+
+    async acquireChannel(interaction, categoryId, ownerId) {
+        if (!canManageBot(interaction.member, this.client.config)) {
+            return interaction.reply({ content: '❌ Non autorisé.', flags: MessageFlags.Ephemeral });
+        }
+
+        await interaction.deferUpdate();
+
+        const ticketConfig = this.client.config.tickets.find(ticket => ticket.id === categoryId);
+        if (!ticketConfig || !isDiscordId(ticketConfig.staffRoleId)) {
+            return interaction.followUp({
+                content: '❌ Catégorie introuvable ou mal configurée.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const channel = interaction.channel;
+        if (this.parseTopic(channel.topic)) {
+            return interaction.followUp({
+                content: '❌ Ce salon est déjà un ticket géré par le bot.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const reason = `Salon acquis comme ticket par ${interaction.user.tag}`;
+        await channel.permissionOverwrites.set(
+            this.buildTicketPermissionOverwrites(interaction, ticketConfig, ownerId),
+            reason
+        );
+        await channel.setTopic(this.buildTopic(ownerId, ticketConfig.id), reason);
+
+        const acquiredByName = getDisplayName(interaction.member, interaction.user);
+        const ownerMember = await interaction.guild.members.fetch(ownerId).catch(() => null);
+        const ownerDisplayName = ownerMember ? getDisplayName(ownerMember, ownerMember.user) : `<@${ownerId}>`;
+
+        const logEmbed = new EmbedBuilder()
+            .setTitle('📥 TICKET ACQUIS')
+            .setColor(this.client.config.bot.color)
+            .setDescription([
+                `Acquis par : **${acquiredByName}** (${interaction.user.tag})`,
+                `Propriétaire : <@${ownerId}>`,
+                `Catégorie : **${ticketConfig.label}**`,
+                `Salon : ${channel}`
+            ].join('\n'))
+            .setTimestamp();
+        await this.discordLogService.send(interaction.guild, logEmbed);
+
+        await this.sendTicketChannelMessage(channel, ticketConfig, ownerId, ownerDisplayName, [
+            `**Acquis par :** ${acquiredByName}`
+        ]);
+
+        await interaction.followUp({
+            content: `✅ Salon acquis comme ticket **${ticketConfig.label}**.`,
+            flags: MessageFlags.Ephemeral
+        });
     }
 
     async showArchitectureQuestionnaire(interaction) {
@@ -248,47 +345,7 @@ class TicketService {
             });
         }
 
-        const displayName = getDisplayName(interaction.member, interaction.user);
-        const channelName = sanitizeChannelName(`ticket-${displayName}-${ticketConfig.id}`);
-        const channel = await interaction.guild.channels.create({
-            name: channelName,
-            type: ChannelType.GuildText,
-            topic: this.buildTopic(interaction.user.id, ticketConfig.id),
-            parent: isDiscordId(ticketConfig.categoryId) ? ticketConfig.categoryId : undefined,
-            permissionOverwrites: [
-                {
-                    id: interaction.guild.id,
-                    deny: [PermissionFlagsBits.ViewChannel]
-                },
-                {
-                    id: interaction.user.id,
-                    allow: OWNER_PERMISSIONS
-                },
-                {
-                    id: ticketConfig.staffRoleId,
-                    allow: STAFF_PERMISSIONS
-                },
-                {
-                    id: this.client.user.id,
-                    allow: [
-                        ...STAFF_PERMISSIONS,
-                        PermissionFlagsBits.ManageChannels
-                    ]
-                }
-            ],
-            reason: `Ticket ouvert par ${interaction.user.tag}`
-        });
-
-        const logEmbed = new EmbedBuilder()
-            .setTitle('TICKET OUVERT')
-            .setColor(this.client.config.bot.color)
-            .setDescription([
-                `Ouvert par : **${displayName}** (${interaction.user.tag})`,
-                `Categorie : **${ticketConfig.label}**`,
-                `Salon : ${channel}`
-            ].join('\n'))
-            .setTimestamp();
-        await this.discordLogService.send(interaction.guild, logEmbed);
+        const { channel, displayName } = await this.createTicketChannel(interaction, ticketConfig);
 
         const questionnaire = [
             ['Type d architecture', interaction.fields.getTextInputValue('architecture-type')],
@@ -296,53 +353,11 @@ class TicketService {
             ['Nombre de partenaires', interaction.fields.getTextInputValue('architecture-partners')]
         ];
 
-        const ticketEmbed = new EmbedBuilder()
-            .setTitle(ticketConfig.title)
-            .setDescription([
-                ticketConfig.description.replace('{user}', `${interaction.user}`),
-                '',
-                '**Informations :**',
-                `**Utilisateur :** ${displayName}`,
-                '',
-                '**Questionnaire :**',
-                ...questionnaire.map(([label, value]) => `**${label} :** ${value}`)
-            ].join('\n'))
-            .setColor(this.client.config.bot.color);
-
-        const controls = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('ticket:close')
-                .setLabel('Fermer')
-                .setStyle(ButtonStyle.Danger),
-            new ButtonBuilder()
-                .setCustomId('ticket:reassign')
-                .setLabel('Reassigner')
-                .setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId('ticket:rename')
-                .setLabel('Renommer')
-                .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-                .setCustomId('ticket:add-user')
-                .setLabel('Ajouter')
-                .setEmoji('➕')
-                .setStyle(ButtonStyle.Success),
-            new ButtonBuilder()
-                .setCustomId('ticket:remove-user')
-                .setLabel('Retirer')
-                .setEmoji('➖')
-                .setStyle(ButtonStyle.Secondary)
-        );
-
-        await channel.send({
-            content: `${interaction.user} | <@&${ticketConfig.staffRoleId}>`,
-            embeds: [ticketEmbed],
-            components: [controls],
-            allowedMentions: {
-                users: [interaction.user.id],
-                roles: [ticketConfig.staffRoleId]
-            }
-        });
+        await this.sendTicketChannelMessage(channel, ticketConfig, interaction.user.id, displayName, [
+            '',
+            '**Questionnaire :**',
+            ...questionnaire.map(([label, value]) => `**${label} :** ${value}`)
+        ]);
 
         await interaction.editReply({ content: `Ticket cree : ${channel}` });
     }

@@ -37,7 +37,7 @@ test('le client initialise tous ses services sans connexion Discord', async cont
 
     await client.initialize();
 
-    assert.equal(client.commands.size, 4);
+    assert.equal(client.commands.size, 5);
     assert.ok(client.services.tickets);
     assert.ok(client.services.missions);
     assert.ok(client.services.reminders);

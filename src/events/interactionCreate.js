@@ -35,6 +35,9 @@ module.exports = function registerInteractionCreate(client) {
                     await client.services.tickets.createTicket(interaction, interaction.values[0]);
                 } else if (interaction.customId === 'ticket:reassign-confirm') {
                     await client.services.tickets.reassignTicket(interaction, interaction.values[0]);
+                } else if (interaction.customId.startsWith('ticket:acquire-confirm:')) {
+                    const ownerId = interaction.customId.slice('ticket:acquire-confirm:'.length);
+                    await client.services.tickets.acquireChannel(interaction, interaction.values[0], ownerId);
                 }
                 return;
             }
