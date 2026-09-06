@@ -1,0 +1,98 @@
+name: Deploy Sprunk Discord Bot
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sprunk-discord-bot-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to Raspberry Pi
+
+    runs-on:
+      - self-hosted
+      - linux
+      - ARM64
+      - sprunk-bot
+
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Check environment
+        shell: bash
+        run: |
+          echo "User:"
+          whoami
+
+          echo "Node:"
+          node --version
+
+          echo "NPM:"
+          npm --version
+
+      - name: Deploy files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rsync -a --delete \
+            --exclude='.git' \
+            --exclude='.env' \
+            --exclude='node_modules' \
+            --exclude='data' \
+            ./ /opt/discord-bot/
+
+      - name: Install dependencies
+        shell: bash
+        working-directory: /opt/discord-bot
+        run: |
+          set -euo pipefail
+
+          npm ci
+
+      - name: Build application
+        shell: bash
+        working-directory: /opt/discord-bot
+        run: |
+          set -euo pipefail
+
+          npm run build --if-present
+
+      - name: Remove development dependencies
+        shell: bash
+        working-directory: /opt/discord-bot
+        run: |
+          npm prune --omit=dev
+
+      - name: Restart Discord bot
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sudo -n /usr/bin/systemctl restart discordbot.service
+
+          sleep 3
+
+          if /usr/bin/systemctl is-active --quiet discordbot.service; then
+            echo "✅ Sprunk Discord Bot is running."
+          else
+            echo "❌ Sprunk Discord Bot failed to start."
+
+            /usr/bin/systemctl status discordbot.service \
+              --no-pager \
+              --full
+
+            exit 1
+          fi
