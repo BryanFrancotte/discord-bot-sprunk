@@ -47,12 +47,19 @@ jobs:
         run: |
           set -euo pipefail
 
+          echo "Deploying as:"
+          whoami
+
           rsync -a --delete \
+            --no-owner \
+            --no-group \
             --exclude='.git' \
             --exclude='.env' \
             --exclude='node_modules' \
             --exclude='data' \
             ./ /opt/discord-bot/
+
+          echo "Files deployed successfully."
 
       - name: Install dependencies
         shell: bash
