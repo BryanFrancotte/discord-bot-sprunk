@@ -5,5 +5,3 @@ node_modules/
 npm-debug.log*
 data/*.json
 !data/.gitkeep
-config.json
-config.json.tmp
