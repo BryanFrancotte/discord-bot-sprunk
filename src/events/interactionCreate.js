@@ -26,6 +26,8 @@ module.exports = function registerInteractionCreate(client) {
                     await client.services.tickets.showAddUserMenu(interaction);
                 } else if (interaction.customId === 'ticket:remove-user') {
                     await client.services.tickets.showRemoveUserMenu(interaction);
+                } else if (interaction.customId === 'rules:accept') {
+                    await client.services.rules.acceptRules(interaction);
                 }
                 return;
             }

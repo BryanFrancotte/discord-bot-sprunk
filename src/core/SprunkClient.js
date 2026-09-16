@@ -14,6 +14,7 @@ const CommandRegistry = require('../services/CommandRegistry');
 const DiscordLogService = require('../services/DiscordLogService');
 const MissionService = require('../services/MissionService');
 const ReminderService = require('../services/ReminderService');
+const RulesService = require('../services/RulesService');
 const StatusService = require('../services/StatusService');
 const TicketLogService = require('../services/TicketLogService');
 const TicketService = require('../services/TicketService');
@@ -74,6 +75,7 @@ class SprunkClient extends Client {
         this.services.reminders = new ReminderService(this, missionStore);
         this.services.troll = new TrollService(this);
         this.services.status = new StatusService(this, discordLogs);
+        this.services.rules = new RulesService(this);
 
         registerEvents(this);
         this.configService.watch();

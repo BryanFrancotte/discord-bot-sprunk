@@ -49,7 +49,8 @@ Lors de l’invitation du bot, prévoyez au minimum :
 - Gérer les salons et leurs permissions ;
 - Gérer et lire l’historique des messages ;
 - Ajouter et gérer les réactions ;
-- Intégrer des liens et joindre des fichiers.
+- Intégrer des liens et joindre des fichiers ;
+- Gérer les rôles, pour attribuer le rôle membre depuis le bouton de `/reglement`.
 
 Le rôle du bot doit être placé au-dessus des rôles qu’il doit mentionner ou administrer.
 
@@ -59,6 +60,7 @@ Le rôle du bot doit être placé au-dessus des rôles qu’il doit mentionner o
 - `!setup` : variante historique de `/template`, réservée aux administrateurs.
 - `/mission` : crée une mission et programme les rappels à 15 minutes, 5 minutes et au démarrage.
 - `/distributeur` : publie anonymement le message d’information configuré dans le code.
+- `/reglement` : publie le règlement dans le salon courant, avec un bouton « Lu et Approuvé » qui attribue le rôle membre (`rules.memberRoleId`). Réservé aux administrateurs.
 - `/troll` : envoie une série limitée de messages privés ; désactivée par défaut.
 - `/acquire` : transforme le salon courant (non créé par le bot) en ticket géré, avec toutes les actions d’un ticket normal.
 - `/statut` : indique si le Sprunk est ouvert ou fermé en renommant le salon de statut (`status.channelId`) et en y publiant le panneau correspondant (mention de rôle, message et image). Le bot doit pouvoir gérer ce salon. Les visuels par défaut sont dans `assets/`.

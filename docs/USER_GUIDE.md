@@ -91,6 +91,7 @@ Les rappels sont automatiquement nettoyés (messages supprimés) quelques minute
 | `/distributeur` | Publie l'annonce standard d'installation d'un distributeur Sprunk dans le salon courant | Rôle `distributorRoleId`, administrateurs, ou rôle `reassignRoleId` |
 | `/acquire` | Transforme le salon courant en ticket géré par le bot (voir §1) | Administrateurs ou rôle `reassignRoleId` |
 | `/statut` | Indique si le Sprunk est ouvert ou fermé : renomme le salon de statut et met à jour son message (voir ci-dessous) | Administrateurs ou rôle `reassignRoleId` |
+| `/reglement` | Publie le règlement dans le salon courant, avec un bouton qui donne le rôle membre (voir ci-dessous) | Administrateurs |
 | `/troll` | Envoie une courte rafale de messages privés à une cible, avec un cooldown | Administrateurs ou rôle `reassignRoleId` — **et seulement si activée dans `config.json`** |
 
 `/troll` est **désactivée par défaut**. Voir §4 pour l'activer.
@@ -107,6 +108,17 @@ Un salon dédié sert de panneau « ouvert / fermé » : son nom dans la liste d
 À chaque changement, le bot **publie un nouveau message**, puis supprime le panneau précédent qu'il avait lui-même posté : le salon ne garde donc qu'un seul panneau, tout en notifiant les membres à chaque fois. C'est voulu — modifier un message existant ne déclenche aucune notification chez personne. Un message posté par quelqu'un d'autre n'est jamais supprimé. Pour garder un panneau propre, laissez ce salon en lecture seule pour les membres. Chaque changement est journalisé dans le salon de logs.
 
 **Limite Discord** : un même salon ne peut être renommé que 2 fois par tranche de 10 minutes. Au-delà, le bot refuse la commande et indique dans combien de minutes réessayer — ni le nom ni le message ne sont modifiés, pour que le panneau ne se contredise jamais. Changer seulement le message sans changer le nom du salon n'est pas concerné par cette limite.
+
+### Le règlement (`/reglement`)
+
+Lancée dans un salon, la commande y publie le règlement : un encadré numéroté suivi d'un bouton vert **« Lu et Approuvé »**.
+
+- Un membre qui clique reçoit le rôle défini par `rules.memberRoleId` et une confirmation visible de lui seul. C'est ainsi qu'on ouvre l'accès au reste du serveur après acceptation.
+- Cliquer une deuxième fois ne fait rien de plus : le bot répond que le règlement est déjà accepté.
+- Le bouton reste actif tant que le message existe — republier le règlement crée un second message, supprimez l'ancien si vous ne le voulez plus.
+- Le texte, le titre, l'avertissement et le libellé du bouton se modifient dans `config.json` (voir §4), sans toucher au code.
+
+Pour que le bouton fonctionne, le rôle du bot doit être **au-dessus** du rôle membre dans la liste des rôles du serveur et avoir la permission « Gérer les rôles ». Sinon, le membre reçoit un message d'erreur explicite au clic.
 
 ## 4. Réglages courants dans `config.json`
 
@@ -180,6 +192,25 @@ Un tableau, une entrée par catégorie de ticket. Chaque entrée a besoin au min
 - `image` — soit un fichier du dépôt (`assets/statut-ouvert.png` et `assets/statut-ferme.png` sont fournis : remplacez-les pour changer les visuels), soit une adresse `https://…`. Champ facultatif : sans lui, le panneau est publié sans image. Si le fichier est introuvable, le panneau est publié quand même et la commande vous le signale.
 - Si `open` ou `closed` est absent, `/statut` fonctionne quand même à condition de renseigner les options `nom` et `message` à chaque fois.
 
+### Section `rules`
+
+```json
+"rules": {
+  "memberRoleId": "000000000000000000",
+  "title": "📜 RÈGLEMENT",
+  "warning": "⚠️ **PRÉNOM ET NOM OBLIGATOIRE** ⚠️",
+  "items": ["Respectez les autres membres du serveur.", "Pas de contenu offensant…"],
+  "note": "Les règles peuvent être modifiées à tout moment sans préavis.",
+  "buttonLabel": "Lu et Approuvé"
+}
+```
+
+- `memberRoleId` — rôle attribué par le bouton. Sans lui, le bouton répond qu'il n'est pas configuré et n'attribue rien.
+- `items` — la liste des règles, numérotées automatiquement (1️⃣, 2️⃣…) dans l'ordre du tableau. Ajouter ou retirer une règle ne demande aucune modification de code.
+- `title`, `warning`, `note`, `buttonLabel` — les textes autour de la liste. Mettre `""` pour `warning` ou `note` les retire.
+- Section absente : le règlement par défaut (celui livré avec le bot) est publié, mais le bouton ne pourra pas attribuer de rôle tant que `memberRoleId` n'est pas renseigné.
+- L'ensemble du règlement doit tenir dans les 4096 caractères d'un encadré Discord ; au-delà, la commande refuse de publier.
+
 ## 5. Problèmes courants
 
 - **Les commandes slash n'apparaissent pas** — elles sont enregistrées sur le serveur défini par `bot.guildId` à chaque démarrage du bot ; vérifiez que le bot est bien connecté et que `guildId` est correct. Un redémarrage du bot force un nouvel enregistrement.
@@ -188,4 +219,5 @@ Un tableau, une entrée par catégorie de ticket. Chaque entrée a besoin au min
 - **Un rôle staff « mal configuré »** — le `staffRoleId` de la catégorie dans `config.json` n'est pas un ID Discord valide ; corrigez-le dans `config.json`.
 - **`/acquire` refuse d'agir** — soit le salon est déjà reconnu comme un ticket (topic déjà rattaché), soit la catégorie choisie a un `staffRoleId` invalide dans `config.json`.
 - **`/statut` répond « ⏳ … réessayez dans X min »** — le salon de statut a déjà été renommé 2 fois dans les 10 dernières minutes (limite Discord). Attendre le délai indiqué.
+- **Le bouton « Lu et Approuvé » n'attribue pas le rôle** — soit `rules.memberRoleId` n'est pas renseigné dans `config.json`, soit le rôle du bot est placé sous le rôle membre (ou il lui manque « Gérer les rôles »). Le message affiché au clic indique lequel des deux.
 - **`/statut` reste longtemps sur « réfléchit… »** — le salon a été renommé récemment en dehors du bot (à la main, ou juste avant un redémarrage du bot) : Discord fait patienter le renommage jusqu'à 10 minutes, puis la commande aboutit d'elle-même.

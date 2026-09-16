@@ -45,6 +45,7 @@ Règle de dépendance à retenir : **`events/` et `commands/` ne contiennent qua
 | `missions` | Création de missions, gestion des réactions ✅/🟡 | `services/MissionService.js` |
 | `reminders` | Boucle périodique qui envoie les rappels 15 min / 5 min / maintenant | `services/ReminderService.js` |
 | `troll` | Envoi de messages privés limités, avec cooldown | `services/TrollService.js` |
+| `rules` | Publication du règlement et attribution du rôle membre via le bouton `rules:accept` | `services/RulesService.js` |
 | `status` | Panneau ouvert/fermé : renomme le salon `status.channelId`, publie le panneau (mention de rôle + image) et supprime le précédent | `services/StatusService.js` |
 
 Un service ne connaît que `client` et, si besoin, un `JsonStore` ou un autre service injecté au constructeur (voir `TicketService(client, ticketLogService, discordLogService)`). Il n'importe jamais directement `events/` ni `commands/`.
