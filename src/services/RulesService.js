@@ -61,7 +61,7 @@ class RulesService {
             new ButtonBuilder()
                 .setCustomId('rules:accept')
                 .setLabel(this.client.config.rules?.buttonLabel || DEFAULT_RULES.buttonLabel)
-                .setEmoji('✅')
+                .setEmoji('✔️')
                 .setStyle(ButtonStyle.Success)
         );
     }

@@ -107,15 +107,15 @@
     "title": "📜 RÈGLEMENT",
     "warning": "⚠️ **PRÉNOM ET NOM OBLIGATOIRE** ⚠️",
     "items": [
-      "1️⃣**Respectez les autres membres de la radio d. Pas de harcèlement, de discours de haine, de racisme, de sexisme ou de toute autre forme de discrimination.**",
-      "2️⃣**Pas de contenu offensant, obscène, choquant ou inapproprié.**",
-      "3️⃣**Aucune publicité ou promotion de contenu tiers sans autorisation préalable.**",
-      "4️⃣**Pas de spamming, de troll, ou de tout autre comportement perturbateur.**",
-      "5️⃣**Respectez les règles spécifiques de chaque salon/catégorie du serveur.**",
-      "6️⃣**Ne partagez pas d'informations personnelles ou de coordonnées.**",
-      "7️⃣**Le staff se réserve le droit de supprimer tout contenu jugé inapproprié ou de bannir des membres en cas de violation des règles.**"
+      "**Respectez les autres membres de la radio d. Pas de harcèlement, de discours de haine, de racisme, de sexisme ou de toute autre forme de discrimination.**",
+      "**Pas de contenu offensant, obscène, choquant ou inapproprié.**",
+      "**Aucune publicité ou promotion de contenu tiers sans autorisation préalable.**",
+      "**Pas de spamming, de troll, ou de tout autre comportement perturbateur.**",
+      "**Respectez les règles spécifiques de chaque salon/catégorie du serveur.**",
+      "**Ne partagez pas d'informations personnelles ou de coordonnées.**",
+      "**Le staff se réserve le droit de supprimer tout contenu jugé inapproprié ou de bannir des membres en cas de violation des règles.**"
     ],
     "note": "Les règles peuvent être modifiées à tout moment sans préavis.",
-    "buttonLabel": "✔️Lu et Approuvé"
+    "buttonLabel": "Lu et Approuvé"
   }
 }
