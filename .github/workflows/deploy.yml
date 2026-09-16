@@ -57,9 +57,23 @@ jobs:
             --exclude='.env' \
             --exclude='node_modules' \
             --exclude='data' \
+            --exclude='config.json' \
             ./ /opt/discord-bot/
 
           echo "Files deployed successfully."
+
+      - name: Seed configuration on first deploy
+        shell: bash
+        working-directory: /opt/discord-bot
+        run: |
+          set -euo pipefail
+
+          if [ -f config.json ]; then
+            echo "config.json already exists, deployment leaves it untouched."
+          else
+            cp config.example.json config.json
+            echo "::warning::config.json created from config.example.json, replace the placeholder IDs."
+          fi
 
       - name: Install dependencies
         shell: bash

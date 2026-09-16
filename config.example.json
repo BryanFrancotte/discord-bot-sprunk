@@ -1,0 +1,70 @@
+{
+  "bot": {
+    "guildId": "000000000000000000",
+    "logsChannelId": "000000000000000000",
+    "missionChannelId": "000000000000000000",
+    "reassignRoleId": "000000000000000000",
+    "missionNotificationRoleId": "000000000000000000",
+    "distributorRoleId": "000000000000000000",
+    "color": "#00ff11",
+    "footerText": "SPRUNK",
+    "clearGlobalCommandsOnStartup": false
+  },
+  "tickets": [
+    {
+      "id": "direction",
+      "label": "🥤 Contacter la direction",
+      "emoji": "🥤",
+      "categoryId": "000000000000000000",
+      "staffRoleId": "000000000000000000",
+      "title": "🥤 Sprunk | Direction",
+      "description": "Bonjour {user}, un membre de l'équipe **SPRUNK** arrive prochainement.",
+      "details": "Questions générales sur nos produits.",
+      "waitMessage": "Veuillez décrire votre demande en attendant une réponse."
+    },
+    {
+      "id": "postuler",
+      "label": "💼 Postuler au Sprunk",
+      "emoji": "💼",
+      "categoryId": "000000000000000000",
+      "staffRoleId": "000000000000000000",
+      "title": "💼 Postuler",
+      "description": "Bonjour {user},",
+      "details": "",
+      "waitMessage": "Veuillez décrire votre demande en attendant une réponse."
+    }
+  ],
+  "missions": {
+    "checkIntervalMs": 30000,
+    "retentionHours": 24,
+    "transientMessageDurationMs": 5000
+  },
+  "ticketsSettings": {
+    "transcriptMessageLimit": 1000,
+    "deleteDelayMs": 2000,
+    "closeLogsChannelId": "000000000000000000"
+  },
+  "troll": {
+    "enabled": false,
+    "messageCount": 15,
+    "delayMs": 800,
+    "cooldownMs": 600000,
+    "gifs": [
+      "https://media.giphy.com/media/amxLHEPgGDCKs/giphy.gif"
+    ]
+  },
+  "status": {
+    "channelId": "000000000000000000",
+    "notificationRoleId": "000000000000000000",
+    "open": {
+      "channelName": "『🟢』-𝑷𝒆𝒓𝒎𝒂𝒏𝒆𝒏𝒄𝒆",
+      "message": "Le Sprunk est **ouvert** ! Passez nous voir.",
+      "image": "assets/statut-ouvert.png"
+    },
+    "closed": {
+      "channelName": "『🔴』-𝑷𝒆𝒓𝒎𝒂𝒏𝒆𝒏𝒄𝒆",
+      "message": "Le Sprunk est actuellement **fermé**. À bientôt !",
+      "image": "assets/statut-ferme.png"
+    }
+  }
+}

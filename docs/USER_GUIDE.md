@@ -90,9 +90,23 @@ Les rappels sont automatiquement nettoyés (messages supprimés) quelques minute
 |---|---|---|
 | `/distributeur` | Publie l'annonce standard d'installation d'un distributeur Sprunk dans le salon courant | Rôle `distributorRoleId`, administrateurs, ou rôle `reassignRoleId` |
 | `/acquire` | Transforme le salon courant en ticket géré par le bot (voir §1) | Administrateurs ou rôle `reassignRoleId` |
+| `/statut` | Indique si le Sprunk est ouvert ou fermé : renomme le salon de statut et met à jour son message (voir ci-dessous) | Administrateurs ou rôle `reassignRoleId` |
 | `/troll` | Envoie une courte rafale de messages privés à une cible, avec un cooldown | Administrateurs ou rôle `reassignRoleId` — **et seulement si activée dans `config.json`** |
 
 `/troll` est **désactivée par défaut**. Voir §4 pour l'activer.
+
+### Le salon de statut (`/statut`)
+
+Un salon dédié sert de panneau « ouvert / fermé » : son nom dans la liste des salons et son dernier message indiquent l'état du Sprunk.
+
+- `/statut etat:Ouvert` ou `/statut etat:Fermé` renomme le salon et publie le panneau de cet état : mention du rôle configuré, message et image prédéfinis (section `status` de `config.json`, voir §4) — encadré vert pour « Ouvert », rouge pour « Fermé ».
+- Option `message` : remplace le message prédéfini, pour cette fois uniquement (ex. « Ouvert jusqu'à 23h ce soir ! »). Une option de commande slash ne peut pas contenir de retour à la ligne : pour un message sur plusieurs lignes, écrivez-le dans `config.json` avec `\n`.
+- Option `nom` : remplace le nom de salon prédéfini, pour cette fois uniquement.
+- Option `ping` : mettre `Non` pour publier sans mentionner le rôle — utile pour corriger une faute sans notifier tout le monde une seconde fois.
+
+À chaque changement, le bot **publie un nouveau message**, puis supprime le panneau précédent qu'il avait lui-même posté : le salon ne garde donc qu'un seul panneau, tout en notifiant les membres à chaque fois. C'est voulu — modifier un message existant ne déclenche aucune notification chez personne. Un message posté par quelqu'un d'autre n'est jamais supprimé. Pour garder un panneau propre, laissez ce salon en lecture seule pour les membres. Chaque changement est journalisé dans le salon de logs.
+
+**Limite Discord** : un même salon ne peut être renommé que 2 fois par tranche de 10 minutes. Au-delà, le bot refuse la commande et indique dans combien de minutes réessayer — ni le nom ni le message ne sont modifiés, pour que le panneau ne se contredise jamais. Changer seulement le message sans changer le nom du salon n'est pas concerné par cette limite.
 
 ## 4. Réglages courants dans `config.json`
 
@@ -141,6 +155,31 @@ Un tableau, une entrée par catégorie de ticket. Chaque entrée a besoin au min
 
 `enabled: false` désactive complètement la commande. Le bot impose toujours un maximum de 15 messages, un délai minimal de 800 ms entre deux messages, et un cooldown minimal d'une minute par cible, quels que soient les chiffres indiqués ici.
 
+### Section `status`
+
+```json
+"status": {
+  "channelId": "000000000000000000",
+  "notificationRoleId": "000000000000000000",
+  "open": {
+    "channelName": "🟢-ouvert",
+    "message": "Le Sprunk est **ouvert** ! Passez nous voir.",
+    "image": "assets/statut-ouvert.png"
+  },
+  "closed": {
+    "channelName": "🔴-fermé",
+    "message": "Le Sprunk est actuellement **fermé**. À bientôt !",
+    "image": "assets/statut-ferme.png"
+  }
+}
+```
+
+- `channelId` — le salon qui sert de panneau pour `/statut`. Obligatoire pour utiliser la commande. Le bot doit pouvoir y **gérer le salon** (renommage), envoyer des messages et lire l'historique.
+- `notificationRoleId` — rôle mentionné en tête du panneau à chaque changement. Laisser vide (ou retirer le champ) pour ne mentionner personne.
+- `open` / `closed` — nom du salon, message et image affichés pour chaque état. `\n` dans `message` crée un retour à la ligne. Discord met les noms de salon en minuscules et remplace les espaces par des tirets ; les emojis et les accents sont conservés.
+- `image` — soit un fichier du dépôt (`assets/statut-ouvert.png` et `assets/statut-ferme.png` sont fournis : remplacez-les pour changer les visuels), soit une adresse `https://…`. Champ facultatif : sans lui, le panneau est publié sans image. Si le fichier est introuvable, le panneau est publié quand même et la commande vous le signale.
+- Si `open` ou `closed` est absent, `/statut` fonctionne quand même à condition de renseigner les options `nom` et `message` à chaque fois.
+
 ## 5. Problèmes courants
 
 - **Les commandes slash n'apparaissent pas** — elles sont enregistrées sur le serveur défini par `bot.guildId` à chaque démarrage du bot ; vérifiez que le bot est bien connecté et que `guildId` est correct. Un redémarrage du bot force un nouvel enregistrement.
@@ -148,3 +187,5 @@ Un tableau, une entrée par catégorie de ticket. Chaque entrée a besoin au min
 - **Un ticket ne se ferme pas** — le bouton Fermer est bloqué si une fermeture est déjà en cours sur ce salon (message « ⏳ Ce ticket est déjà en cours de fermeture »). Attendre la fin de la suppression du salon.
 - **Un rôle staff « mal configuré »** — le `staffRoleId` de la catégorie dans `config.json` n'est pas un ID Discord valide ; corrigez-le dans `config.json`.
 - **`/acquire` refuse d'agir** — soit le salon est déjà reconnu comme un ticket (topic déjà rattaché), soit la catégorie choisie a un `staffRoleId` invalide dans `config.json`.
+- **`/statut` répond « ⏳ … réessayez dans X min »** — le salon de statut a déjà été renommé 2 fois dans les 10 dernières minutes (limite Discord). Attendre le délai indiqué.
+- **`/statut` reste longtemps sur « réfléchit… »** — le salon a été renommé récemment en dehors du bot (à la main, ou juste avant un redémarrage du bot) : Discord fait patienter le renommage jusqu'à 10 minutes, puis la commande aboutit d'elle-même.

@@ -14,8 +14,18 @@ function sanitizeChannelName(value, fallback = 'ticket') {
     return sanitized || fallback;
 }
 
+// Reproduit la normalisation appliquée par Discord aux salons textuels (minuscules,
+// espaces en tirets) sans retirer emojis ni accents, contrairement à sanitizeChannelName.
+function toTextChannelName(value) {
+    return String(value ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .slice(0, 100);
+}
+
 function getDisplayName(member, user) {
     return member?.displayName || user?.globalName || user?.username || 'utilisateur';
 }
 
-module.exports = { getDisplayName, sanitizeChannelName };
+module.exports = { getDisplayName, sanitizeChannelName, toTextChannelName };

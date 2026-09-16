@@ -45,6 +45,7 @@ Règle de dépendance à retenir : **`events/` et `commands/` ne contiennent qua
 | `missions` | Création de missions, gestion des réactions ✅/🟡 | `services/MissionService.js` |
 | `reminders` | Boucle périodique qui envoie les rappels 15 min / 5 min / maintenant | `services/ReminderService.js` |
 | `troll` | Envoi de messages privés limités, avec cooldown | `services/TrollService.js` |
+| `status` | Panneau ouvert/fermé : renomme le salon `status.channelId`, publie le panneau (mention de rôle + image) et supprime le précédent | `services/StatusService.js` |
 
 Un service ne connaît que `client` et, si besoin, un `JsonStore` ou un autre service injecté au constructeur (voir `TicketService(client, ticketLogService, discordLogService)`). Il n'importe jamais directement `events/` ni `commands/`.
 
@@ -113,6 +114,10 @@ await store.update(data => { data.items.push(nouvelItem); });
 
 `ConfigService` charge le fichier, le valide (`bot.guildId` doit être un ID Discord, `tickets` doit être un tableau non vide de 25 entrées max avec des `id` uniques), puis expose `client.config`. Un `fs.watchFile` (intervalle 1s) recharge automatiquement une modification valide et **ignore silencieusement** (avec un message d'erreur en console) une modification invalide — l'ancienne config reste active. N'ajoutez jamais de valeur par défaut « magique » dans le code pour compenser un champ manquant : si un champ devient obligatoire, ajoutez la vérification dans `ConfigService.validate()` pour que l'échec soit clair au chargement plutôt qu'une exception plus tard dans un handler d'interaction.
 
+**Écrire la configuration** : passez toujours par `ConfigService.save(nextConfig)`, jamais par un `fs.writeFile` direct sur `config.json`. `save()` valide **avant** d'écrire (une config invalide n'atteint donc jamais le disque), écrit dans `config.json.tmp` puis fait un `rename()` — un lecteur concurrent ne peut pas tomber sur un JSON tronqué —, et met à jour la copie en mémoire dans la foulée. `load()` et `save()` mémorisent le contenu brut dans `loadedRaw` : le watcher compare ce contenu avant de recharger, ce qui évite de re-parser (et de logguer « config.json rechargé ») après nos propres écritures.
+
+**Cycle de vie du fichier** : `config.json` est propre à chaque installation, donc ignoré par Git et exclu du `rsync --delete` de `.github/workflows/deploy.yml` — sans quoi chaque déploiement écraserait la configuration de production. Le dépôt ne versionne que le modèle `config.example.json` ; l'étape « Seed configuration on first deploy » le copie sur la machine cible uniquement si `config.json` est absent. **Conséquence** : un nouveau champ de configuration doit être ajouté à `config.example.json` *et* documenté, car il n'arrivera pas tout seul sur les installations existantes — prévoyez qu'il puisse être absent (`ConfigService.validate()` pour un champ obligatoire, lecture défensive sinon).
+
 ## 6. Conventions de code
 
 - **Pas de commentaires** sauf pour une contrainte non évidente (voir `JsonStore.initialize` ou `parseParisDate` pour des exemples de ce qui mérite un commentaire).
@@ -135,7 +140,8 @@ Quand vous touchez à un service, ajoutez au minimum un test qui couvre la nouve
 ## 8. Dette technique connue (assumée, pas oubliée)
 
 - **Persistance en fichiers JSON plats** (`data/*.json`) plutôt qu'une base de données. Choix délibéré tant que le bot tourne sur un seul serveur avec un volume modeste de tickets/missions. À revisiter si le bot doit gérer plusieurs serveurs ou un fort volume — voir la discussion dans l'historique du projet avant de migrer vers SQLite ou autre.
-- **État en mémoire non persisté** (`TicketService.closingTickets`, `TrollService.cooldowns`) : réinitialisé à chaque redémarrage. C'est voulu — un redémarrage signifie qu'aucune fermeture n'est réellement « en cours », donc repartir à zéro est correct.
+- **État en mémoire non persisté** (`TicketService.closingTickets`, `TrollService.cooldowns`, `StatusService.renameHistory`) : réinitialisé à chaque redémarrage. C'est voulu — un redémarrage signifie qu'aucune fermeture n'est réellement « en cours », donc repartir à zéro est correct.
+- **`StatusService.renameHistory` ne voit que les renommages faits par le bot depuis son démarrage.** Discord limite le renommage d'un salon à 2 par tranche de 10 minutes, et discord.js met alors la requête en file d'attente au lieu d'échouer : le compteur sert à refuser proprement avant d'atteindre cette attente. Un renommage manuel, ou antérieur à un redémarrage, n'est pas compté ; dans ce cas la commande attend simplement. C'est pourquoi `updateStatus` fait son `deferReply` avant tout appel à Discord (l'interaction reste valide 15 minutes) et renomme **avant** de toucher au message, pour qu'un refus ou une erreur ne laisse jamais un panneau à moitié mis à jour.
 - **`ReminderService`/`MissionService` refont un fetch complet du salon/message à chaque tick** plutôt que de mettre en cache. Acceptable au volume actuel de missions ; à revoir seulement si ça devient un goulot d'étranglement mesuré.
 
 ## 9. Où trouver quoi
@@ -144,3 +150,5 @@ Quand vous touchez à un service, ajoutez au minimum un test qui couvre la nouve
 - Format du topic d'un salon ticket (`sprunk-ticket|owner=...|category=...`) → `TicketService.buildTopic` / `parseTopic`.
 - Calcul des dates Paris (heure d'été/hiver) → `utils/date.js`, testé dans `test/date.test.js`.
 - Qui a le droit de faire quoi → `utils/permissions.js` + les champs `reassignRoleId` / `distributorRoleId` de `config.json`.
+- Visuels du panneau de statut → `assets/`, référencés par `status.<état>.image` dans `config.json` (chemin relatif à la racine du dépôt, ou URL `https://`). `StatusService.resolveImage` joint le fichier local (`attachment://`) ou passe l'URL telle quelle ; un fichier absent n'empêche pas la publication. Ces images sont versionnées et déployées avec le code, contrairement à `config.json`.
+- Pourquoi le panneau est republié au lieu d'être modifié → une modification de message ne déclenche aucune notification Discord ; `StatusService.updateStatus` republie donc le panneau (avec la mention de rôle) puis supprime l'ancien, qu'il n'identifie comme sien que s'il en est l'auteur **et** que le message porte un embed.

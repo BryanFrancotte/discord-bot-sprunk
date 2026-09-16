@@ -28,7 +28,11 @@ Ce README couvre l'installation. Pour aller plus loin :
    BOT_TOKEN=VOTRE_TOKEN
    ```
 
-4. Remplacez tous les identifiants d’exemple dans `config.json`.
+4. Copiez `config.example.json` vers `config.json`, puis remplacez tous les identifiants d’exemple :
+
+   ```powershell
+   Copy-Item config.example.json config.json
+   ```
 5. Démarrez le bot :
 
    ```powershell
@@ -57,8 +61,9 @@ Le rôle du bot doit être placé au-dessus des rôles qu’il doit mentionner o
 - `/distributeur` : publie anonymement le message d’information configuré dans le code.
 - `/troll` : envoie une série limitée de messages privés ; désactivée par défaut.
 - `/acquire` : transforme le salon courant (non créé par le bot) en ticket géré, avec toutes les actions d’un ticket normal.
+- `/statut` : indique si le Sprunk est ouvert ou fermé en renommant le salon de statut (`status.channelId`) et en y publiant le panneau correspondant (mention de rôle, message et image). Le bot doit pouvoir gérer ce salon. Les visuels par défaut sont dans `assets/`.
 
-Les commandes de mission, réassignation, renommage, acquisition et troll sont accessibles aux administrateurs ou au rôle `reassignRoleId`. `/distributeur` accepte également `distributorRoleId`.
+Les commandes de mission, réassignation, renommage, acquisition, statut et troll sont accessibles aux administrateurs ou au rôle `reassignRoleId`. `/distributeur` accepte également `distributorRoleId`.
 
 ## Configuration de `/troll`
 
@@ -89,6 +94,8 @@ src/
 ```
 
 Les données sont créées automatiquement dans `data/missions.json` et `data/ticket-logs.json`. Elles sont exclues de Git. La configuration est rechargée à chaud lorsqu’un `config.json` valide est sauvegardé.
+
+`config.json` est lui aussi exclu de Git : c’est un fichier propre à chaque installation, modifiable à chaud (et à terme depuis une interface d’administration). Seul le modèle `config.example.json` est versionné. Le déploiement GitHub Actions ne l’écrase donc jamais — il le crée depuis le modèle uniquement s’il est absent de la machine cible.
 
 ## Tickets
 

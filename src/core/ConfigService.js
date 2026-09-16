@@ -6,20 +6,48 @@ class ConfigService {
     constructor(configPath) {
         this.configPath = configPath;
         this.config = null;
+        this.loadedRaw = null;
         this.watching = false;
     }
 
     load() {
-        const raw = fs.readFileSync(this.configPath, 'utf8');
-        const nextConfig = JSON.parse(raw);
-        this.validate(nextConfig);
-        this.config = nextConfig;
-        return this.config;
+        return this.apply(fs.readFileSync(this.configPath, 'utf8'));
     }
 
     get current() {
         if (!this.config) return this.load();
         return this.config;
+    }
+
+    apply(raw) {
+        const nextConfig = JSON.parse(raw);
+        this.validate(nextConfig);
+        this.config = nextConfig;
+        this.loadedRaw = raw;
+        return this.config;
+    }
+
+    // Écrit une nouvelle configuration de façon atomique : validation d’abord,
+    // puis fichier temporaire + rename, pour qu’un lecteur ne voie jamais un JSON tronqué.
+    save(nextConfig) {
+        this.validate(nextConfig);
+
+        const raw = `${JSON.stringify(nextConfig, null, 2)}\n`;
+        const temporaryPath = `${this.configPath}.tmp`;
+
+        try {
+            fs.writeFileSync(temporaryPath, raw, 'utf8');
+            fs.renameSync(temporaryPath, this.configPath);
+        } catch (error) {
+            try {
+                fs.unlinkSync(temporaryPath);
+            } catch {
+                // Le fichier temporaire n’existe pas : rien à nettoyer.
+            }
+            throw error;
+        }
+
+        return this.apply(raw);
     }
 
     validate(config) {
@@ -59,7 +87,11 @@ class ConfigService {
             if (current.mtimeMs === previous.mtimeMs) return;
 
             try {
-                this.load();
+                const raw = fs.readFileSync(this.configPath, 'utf8');
+                // Ignore les écritures venant du bot lui-même (save) et les touch sans changement.
+                if (raw === this.loadedRaw) return;
+
+                this.apply(raw);
                 console.log('✅ config.json rechargé.');
             } catch (error) {
                 console.error('⚠️ Configuration invalide, ancienne version conservée :', error.message);
