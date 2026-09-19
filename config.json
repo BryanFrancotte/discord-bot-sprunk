@@ -66,7 +66,15 @@
         "details": "Quel type d'Architecture vous souhaitez vous",
         "waitMessage": "Veuillez décrire votre demande en attendant une réponse.",
         "assignment": {
-            "architects": {},
+            "architects": {
+              "681755639223025703": "🦔",
+              "365021761974304769": "🦈",
+              "1165066396770767000": "🐼",
+              "892155999790694410": "🥛",
+              "288663103712002048": "🐺",
+              "1229951072790118504": "🍁",
+              "1263213777046864015": "🦁"
+            },
             "statuses": {
                 "pending": { "label": "En attente", "emoji": "⚪" },
                 "inProgress": { "label": "En cours", "emoji": "🟠" },
