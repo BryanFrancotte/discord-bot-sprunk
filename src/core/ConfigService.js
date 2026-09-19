@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('fs');
+const { STATUS_KEYS } = require('../utils/ticketAssignment');
 
 class ConfigService {
     constructor(configPath) {
@@ -76,6 +77,38 @@ class ConfigService {
                 throw new Error(`Identifiant de ticket dupliqué : ${ticket.id}`);
             }
             ids.add(ticket.id);
+            if (ticket.assignment !== undefined) this.validateAssignment(ticket);
+        }
+    }
+
+    validateAssignment(ticket) {
+        const { assignment } = ticket;
+        const prefix = `tickets[${ticket.id}].assignment`;
+        if (!assignment || typeof assignment !== 'object' || Array.isArray(assignment)) {
+            throw new Error(`${prefix} doit être un objet.`);
+        }
+
+        const architects = assignment.architects ?? {};
+        if (typeof architects !== 'object' || Array.isArray(architects)) {
+            throw new Error(`${prefix}.architects doit associer un ID Discord à un emoji.`);
+        }
+        for (const [userId, emoji] of Object.entries(architects)) {
+            if (!/^\d{17,20}$/.test(userId)) {
+                throw new Error(`${prefix}.architects : « ${userId} » n’est pas un ID Discord valide.`);
+            }
+            if (typeof emoji !== 'string' || !emoji.trim()) {
+                throw new Error(`${prefix}.architects : emoji manquant pour ${userId}.`);
+            }
+        }
+
+        const statuses = assignment.statuses ?? {};
+        for (const [key, status] of Object.entries(statuses)) {
+            if (!STATUS_KEYS.includes(key)) {
+                throw new Error(`${prefix}.statuses : statut inconnu « ${key} » (attendus : ${STATUS_KEYS.join(', ')}).`);
+            }
+            if (status?.emoji !== undefined && (typeof status.emoji !== 'string' || !status.emoji.trim())) {
+                throw new Error(`${prefix}.statuses.${key}.emoji doit être un emoji non vide.`);
+            }
         }
     }
 

@@ -26,6 +26,10 @@ module.exports = function registerInteractionCreate(client) {
                     await client.services.tickets.showAddUserMenu(interaction);
                 } else if (interaction.customId === 'ticket:remove-user') {
                     await client.services.tickets.showRemoveUserMenu(interaction);
+                } else if (interaction.customId === 'ticket:assign') {
+                    await client.services.assignment.showAssignMenu(interaction);
+                } else if (interaction.customId === 'ticket:status') {
+                    await client.services.assignment.showStatusMenu(interaction);
                 } else if (interaction.customId === 'rules:accept') {
                     await client.services.rules.acceptRules(interaction);
                 }
@@ -37,6 +41,10 @@ module.exports = function registerInteractionCreate(client) {
                     await client.services.tickets.createTicket(interaction, interaction.values[0]);
                 } else if (interaction.customId === 'ticket:reassign-confirm') {
                     await client.services.tickets.reassignTicket(interaction, interaction.values[0]);
+                } else if (interaction.customId === 'ticket:assign-confirm') {
+                    await client.services.assignment.assignTicket(interaction, interaction.values[0]);
+                } else if (interaction.customId === 'ticket:status-confirm') {
+                    await client.services.assignment.setStatus(interaction, interaction.values[0]);
                 } else if (interaction.customId.startsWith('ticket:acquire-confirm:')) {
                     const ownerId = interaction.customId.slice('ticket:acquire-confirm:'.length);
                     await client.services.tickets.acquireChannel(interaction, interaction.values[0], ownerId);

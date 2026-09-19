@@ -16,6 +16,7 @@ const MissionService = require('../services/MissionService');
 const ReminderService = require('../services/ReminderService');
 const RulesService = require('../services/RulesService');
 const StatusService = require('../services/StatusService');
+const TicketAssignmentService = require('../services/TicketAssignmentService');
 const TicketLogService = require('../services/TicketLogService');
 const TicketService = require('../services/TicketService');
 const TrollService = require('../services/TrollService');
@@ -71,6 +72,7 @@ class SprunkClient extends Client {
         this.services.discordLogs = discordLogs;
         this.services.ticketLogs = ticketLogs;
         this.services.tickets = new TicketService(this, ticketLogs, discordLogs);
+        this.services.assignment = new TicketAssignmentService(this, this.services.tickets, discordLogs);
         this.services.missions = new MissionService(this, missionStore);
         this.services.reminders = new ReminderService(this, missionStore);
         this.services.troll = new TrollService(this);

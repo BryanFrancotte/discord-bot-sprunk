@@ -46,6 +46,7 @@ Règle de dépendance à retenir : **`events/` et `commands/` ne contiennent qua
 | `reminders` | Boucle périodique qui envoie les rappels 15 min / 5 min / maintenant | `services/ReminderService.js` |
 | `troll` | Envoi de messages privés limités, avec cooldown | `services/TrollService.js` |
 | `rules` | Publication du règlement et attribution du rôle membre via le bouton `rules:accept` | `services/RulesService.js` |
+| `assignment` | Assignation d'un ticket à un architecte et statut du ticket, portés par les emojis de tête/fin du nom du salon (boutons `ticket:assign` / `ticket:status`, commande `/assigner`) | `services/TicketAssignmentService.js` |
 | `status` | Panneau ouvert/fermé : renomme le salon `status.channelId`, publie le panneau (mention de rôle + image) et supprime le précédent | `services/StatusService.js` |
 
 Un service ne connaît que `client` et, si besoin, un `JsonStore` ou un autre service injecté au constructeur (voir `TicketService(client, ticketLogService, discordLogService)`). Il n'importe jamais directement `events/` ni `commands/`.
@@ -84,6 +85,16 @@ Un service ne connaît que `client` et, si besoin, un `JsonStore` ou un autre se
 Aucune modification de code n'est nécessaire pour une catégorie « simple » : ajoutez une entrée dans le tableau `tickets` de `config.json` (id, label, emoji, categoryId, staffRoleId, title, description, details, waitMessage). `ConfigService.validate()` vérifie que chaque entrée a bien `id`, `label`, `title`, `description` et que les `id` sont uniques ; le rechargement à chaud reprend cette validation.
 
 Si la catégorie a besoin d'un comportement spécial (comme le questionnaire modal d'« architecture »), suivez le patron de `TicketService.needsArchitectureQuestionnaire` / `showArchitectureQuestionnaire` / `createArchitectureTicket` : détectez la catégorie par son `id`, montrez un `ModalBuilder`, puis appelez les mêmes helpers partagés que le flux standard (`createTicketChannel`, `sendTicketChannelMessage`) pour éviter de dupliquer la création de salon.
+
+### Assignation et statut d'un ticket
+
+Une catégorie active l'assignation en déclarant un bloc `assignment` (pas de câblage par `id`). La logique pure vit dans `utils/ticketAssignment.js` et est testée sans Discord (`test/ticketAssignment.test.js`) :
+
+- `getAssignmentConfig(ticketConfig)` — `null` si la catégorie n'a pas d'assignation, sinon `{ architects, statuses }` avec les statuts par défaut complétés (`pending`, `inProgress`, `paid`, `done`, clés fixes validées par `ConfigService.validateAssignment`).
+- `splitChannelName` / `buildChannelName` — le **nom du salon est la seule source de vérité** : emoji en tête = architecte, emoji en fin = statut. C'est sûr parce que la base passe toujours par `sanitizeChannelName`, qui ne produit jamais d'emoji. Aucun état n'est stocké ailleurs (ni topic, ni JSON).
+- `resolveAssignee` / `canChangeStatus` — règles de permission (staff : tout architecte ; architecte : lui-même ; statut : staff ou `staffRoleId`).
+
+`TicketService` pose l'emoji « En attente » à la création, ajoute la rangée de boutons via `buildTicketComponents` (la rangée principale est déjà à 5 boutons, le maximum Discord), et conserve les emojis dans `renameTicket`. Tout renommage de ticket passe par `TicketService.renameChannel`, qui applique le `RenameLimiter` partagé (`utils/renameLimiter.js`, aussi utilisé par `StatusService`).
 
 ### Faire persister un choix entre deux interactions
 
@@ -141,8 +152,8 @@ Quand vous touchez à un service, ajoutez au minimum un test qui couvre la nouve
 ## 8. Dette technique connue (assumée, pas oubliée)
 
 - **Persistance en fichiers JSON plats** (`data/*.json`) plutôt qu'une base de données. Choix délibéré tant que le bot tourne sur un seul serveur avec un volume modeste de tickets/missions. À revisiter si le bot doit gérer plusieurs serveurs ou un fort volume — voir la discussion dans l'historique du projet avant de migrer vers SQLite ou autre.
-- **État en mémoire non persisté** (`TicketService.closingTickets`, `TrollService.cooldowns`, `StatusService.renameHistory`) : réinitialisé à chaque redémarrage. C'est voulu — un redémarrage signifie qu'aucune fermeture n'est réellement « en cours », donc repartir à zéro est correct.
-- **`StatusService.renameHistory` ne voit que les renommages faits par le bot depuis son démarrage.** Discord limite le renommage d'un salon à 2 par tranche de 10 minutes, et discord.js met alors la requête en file d'attente au lieu d'échouer : le compteur sert à refuser proprement avant d'atteindre cette attente. Un renommage manuel, ou antérieur à un redémarrage, n'est pas compté ; dans ce cas la commande attend simplement. C'est pourquoi `updateStatus` fait son `deferReply` avant tout appel à Discord (l'interaction reste valide 15 minutes) et renomme **avant** de toucher au message, pour qu'un refus ou une erreur ne laisse jamais un panneau à moitié mis à jour.
+- **État en mémoire non persisté** (`TicketService.closingTickets`, `TrollService.cooldowns`, les `RenameLimiter` de `StatusService` et `TicketService`) : réinitialisé à chaque redémarrage. C'est voulu — un redémarrage signifie qu'aucune fermeture n'est réellement « en cours », donc repartir à zéro est correct.
+- **`RenameLimiter` (`utils/renameLimiter.js`) ne voit que les renommages faits par le bot depuis son démarrage.** Discord limite le renommage d'un salon à 2 par tranche de 10 minutes, et discord.js met alors la requête en file d'attente au lieu d'échouer : le compteur sert à refuser proprement avant d'atteindre cette attente. Un renommage manuel, ou antérieur à un redémarrage, n'est pas compté ; dans ce cas la commande attend simplement. C'est pourquoi `updateStatus` (et de même l'assignation, le statut et le renommage de ticket) fait son `deferReply` avant tout appel à Discord (l'interaction reste valide 15 minutes) et renomme **avant** de toucher au message, pour qu'un refus ou une erreur ne laisse jamais un panneau à moitié mis à jour.
 - **`ReminderService`/`MissionService` refont un fetch complet du salon/message à chaque tick** plutôt que de mettre en cache. Acceptable au volume actuel de missions ; à revoir seulement si ça devient un goulot d'étranglement mesuré.
 
 ## 9. Où trouver quoi

@@ -41,6 +41,29 @@ Dans le salon, cinq boutons sont disponibles :
 
 Ces actions sont réservées aux **administrateurs** et aux membres ayant le rôle défini par `bot.reassignRoleId` dans `config.json`.
 
+### Assigner un ticket Architecture à un architecte
+
+Les tickets **🔨 Architecture** (et toute catégorie qui déclare un bloc `assignment`, voir §4) ont une seconde rangée de boutons, **📐 Assigner** et **🏷️ Statut**. Le suivi se lit directement dans le nom du salon :
+
+- **l'emoji de l'architecte en tête** du nom : qui s'occupe du ticket ;
+- **l'emoji de statut en fin** du nom : où en est le ticket.
+
+Exemple : `ticket-bob-architecture-⚪` (nouveau, en attente) → assigné à l'architecte 🦊 → `🦊-ticket-bob-architecture-🟠`.
+
+| Statut | Emoji par défaut | Quand |
+|---|---|---|
+| En attente | ⚪ | Posé automatiquement à la création du ticket |
+| En cours | 🟠 | Posé automatiquement à l'assignation |
+| Payé | 💰 | Via le bouton Statut |
+| Terminé | ✅ | Via le bouton Statut |
+
+- **📐 Assigner** — un membre du staff (administrateur ou rôle `reassignRoleId`) choisit l'architecte dans un menu ; un architecte (membre du rôle `staffRoleId` de la catégorie) qui clique s'assigne directement lui-même. L'architecte est mentionné dans le ticket. Réassigner remplace l'emoji de tête ; un ticket en attente passe « En cours », un ticket déjà Payé ou Terminé garde son statut.
+- **`/assigner`** — même chose en commande, à lancer dans le ticket : sans option, vous vous assignez vous-même ; `/assigner architecte:@membre` est réservé au staff.
+- **🏷️ Statut** — choisir le nouveau statut ; seul l'emoji de fin change. Accessible au staff et aux architectes.
+- **Renommer** conserve les emojis d'architecte et de statut sur ces tickets.
+
+Seuls les membres du rôle architecte **ayant un emoji dans `assignment.architects`** peuvent être assignés. Comme pour `/statut`, Discord n'autorise que **2 renommages d'un même salon par tranche de 10 minutes** (assignation, statut et « Renommer » confondus) : au-delà, le bot indique dans combien de minutes réessayer et ne modifie rien.
+
 ### Transformer un salon existant en ticket (`/acquire`)
 
 Si un salon a été créé autrement que par le panel — manuellement, par un autre bot, ou avant l'installation de SPRUNK — il n'est pas reconnu comme un ticket : aucun des boutons ci-dessus ne fonctionne dessus. `/acquire` permet de le rattacher :
@@ -90,6 +113,7 @@ Les rappels sont automatiquement nettoyés (messages supprimés) quelques minute
 |---|---|---|
 | `/distributeur` | Publie l'annonce standard d'installation d'un distributeur Sprunk dans le salon courant | Rôle `distributorRoleId`, administrateurs, ou rôle `reassignRoleId` |
 | `/acquire` | Transforme le salon courant en ticket géré par le bot (voir §1) | Administrateurs ou rôle `reassignRoleId` |
+| `/assigner` | Assigne le ticket courant à un architecte (voir §1) | Administrateurs ou rôle `reassignRoleId` pour n'importe quel architecte ; un architecte pour lui-même |
 | `/statut` | Indique si le Sprunk est ouvert ou fermé : renomme le salon de statut et met à jour son message (voir ci-dessous) | Administrateurs ou rôle `reassignRoleId` |
 | `/reglement` | Publie le règlement dans le salon courant, avec un bouton qui donne le rôle membre (voir ci-dessous) | Administrateurs |
 | `/troll` | Envoie une courte rafale de messages privés à une cible, avec un cooldown | Administrateurs ou rôle `reassignRoleId` — **et seulement si activée dans `config.json`** |
@@ -140,6 +164,23 @@ Ce fichier peut être modifié sans redémarrer le bot — un changement valide 
 ### Section `tickets`
 
 Un tableau, une entrée par catégorie de ticket. Chaque entrée a besoin au minimum de `id`, `label`, `title`, `description` ; `categoryId` (catégorie Discord où créer le salon) et `staffRoleId` (rôle qui aura accès) sont fortement recommandés. `{user}` dans `description` est remplacé par une mention du membre. Ajouter ou retirer une catégorie ne demande aucune modification de code — sauf pour la catégorie `architecture`, qui a un comportement spécial câblé par son `id`.
+
+**Assignation (`assignment`)** — facultatif, par catégorie. Sa présence active les boutons Assigner / Statut et la commande `/assigner` pour cette catégorie (voir §1) :
+
+```json
+"assignment": {
+  "architects": { "123456789012345678": "🦊" },
+  "statuses": {
+    "pending":    { "label": "En attente", "emoji": "⚪" },
+    "inProgress": { "label": "En cours",   "emoji": "🟠" },
+    "paid":       { "label": "Payé",       "emoji": "💰" },
+    "done":       { "label": "Terminé",    "emoji": "✅" }
+  }
+}
+```
+
+- `architects` — ID Discord de chaque architecte → son emoji. Les architectes doivent aussi avoir le `staffRoleId` de la catégorie.
+- `statuses` — facultatif ; seules ces quatre clés sont acceptées, et un label ou un emoji absent reprend la valeur par défaut ci-dessus.
 
 ### Section `missions`
 
@@ -218,6 +259,8 @@ Un tableau, une entrée par catégorie de ticket. Chaque entrée a besoin au min
 - **Un ticket ne se ferme pas** — le bouton Fermer est bloqué si une fermeture est déjà en cours sur ce salon (message « ⏳ Ce ticket est déjà en cours de fermeture »). Attendre la fin de la suppression du salon.
 - **Un rôle staff « mal configuré »** — le `staffRoleId` de la catégorie dans `config.json` n'est pas un ID Discord valide ; corrigez-le dans `config.json`.
 - **`/acquire` refuse d'agir** — soit le salon est déjà reconnu comme un ticket (topic déjà rattaché), soit la catégorie choisie a un `staffRoleId` invalide dans `config.json`.
+- **« Aucun emoji configuré » à l'assignation** — l'architecte a bien le rôle mais n'a pas d'entrée dans `assignment.architects` ; ajoutez son ID et son emoji dans `config.json` (rechargé à chaud).
+- **Assigner / Statut / Renommer répond « ⏳ … réessayez dans X min »** — le ticket a déjà été renommé 2 fois dans les 10 dernières minutes (limite Discord). Attendre le délai indiqué.
 - **`/statut` répond « ⏳ … réessayez dans X min »** — le salon de statut a déjà été renommé 2 fois dans les 10 dernières minutes (limite Discord). Attendre le délai indiqué.
 - **Le bouton « Lu et Approuvé » n'attribue pas le rôle** — soit `rules.memberRoleId` n'est pas renseigné dans `config.json`, soit le rôle du bot est placé sous le rôle membre (ou il lui manque « Gérer les rôles »). Le message affiché au clic indique lequel des deux.
 - **`/statut` reste longtemps sur « réfléchit… »** — le salon a été renommé récemment en dehors du bot (à la main, ou juste avant un redémarrage du bot) : Discord fait patienter le renommage jusqu'à 10 minutes, puis la commande aboutit d'elle-même.

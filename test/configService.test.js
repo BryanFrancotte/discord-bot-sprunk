@@ -108,3 +108,23 @@ test('load mémorise le contenu brut pour distinguer une modification externe', 
     service.save(buildConfig({ missions: { checkIntervalMs: 30000 } }));
     assert.equal(service.loadedRaw, fs.readFileSync(configPath, 'utf8'));
 });
+
+test('validate accepte un bloc assignment valide et rejette un mapping incorrect', async context => {
+    const { service } = await createService(context);
+    const withAssignment = assignment => buildConfig({
+        tickets: [{
+            id: 'architecture',
+            label: 'Architecture',
+            title: 'Architecture',
+            description: 'Bonjour {user}',
+            assignment
+        }]
+    });
+
+    assert.doesNotThrow(() => service.validate(withAssignment({ architects: { '123456789012345678': '🦊' } })));
+    assert.doesNotThrow(() => service.validate(withAssignment({ architects: {}, statuses: { paid: { emoji: '💰' } } })));
+    assert.throws(() => service.validate(withAssignment({ architects: { bob: '🦊' } })), /ID Discord valide/);
+    assert.throws(() => service.validate(withAssignment({ architects: { '123456789012345678': '' } })), /emoji manquant/);
+    assert.throws(() => service.validate(withAssignment({ statuses: { annule: { emoji: '❌' } } })), /statut inconnu/);
+    assert.throws(() => service.validate(withAssignment([])), /doit être un objet/);
+});

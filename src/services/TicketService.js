@@ -18,6 +18,8 @@ const {
 const { canManageBot } = require('../utils/permissions');
 const { getDisplayName, sanitizeChannelName } = require('../utils/text');
 const { isDiscordId } = require('../utils/config');
+const { RenameLimiter, formatRenameLimitMessage } = require('../utils/renameLimiter');
+const { buildChannelName, getAssignmentConfig, splitChannelName } = require('../utils/ticketAssignment');
 
 const OWNER_PERMISSIONS = [
     PermissionFlagsBits.ViewChannel,
@@ -38,6 +40,7 @@ class TicketService {
         this.ticketLogService = ticketLogService;
         this.discordLogService = discordLogService;
         this.closingTickets = new Set();
+        this.renameLimiter = new RenameLimiter();
     }
 
     async sendPanel(channel) {
@@ -117,7 +120,11 @@ class TicketService {
 
     async createTicketChannel(interaction, ticketConfig) {
         const displayName = getDisplayName(interaction.member, interaction.user);
-        const channelName = sanitizeChannelName(`ticket-${displayName}-${ticketConfig.id}`);
+        const baseName = sanitizeChannelName(`ticket-${displayName}-${ticketConfig.id}`);
+        const assignment = getAssignmentConfig(ticketConfig);
+        const channelName = assignment
+            ? buildChannelName({ base: baseName, statusEmoji: assignment.statuses.pending.emoji })
+            : baseName;
 
         const channel = await interaction.guild.channels.create({
             name: channelName,
@@ -193,6 +200,39 @@ class TicketService {
         );
     }
 
+    buildAssignmentRow() {
+        return new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('ticket:assign')
+                .setLabel('Assigner')
+                .setEmoji('📐')
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId('ticket:status')
+                .setLabel('Statut')
+                .setEmoji('🏷️')
+                .setStyle(ButtonStyle.Secondary)
+        );
+    }
+
+    buildTicketComponents(ticketConfig) {
+        const rows = [this.buildTicketControlsRow()];
+        if (getAssignmentConfig(ticketConfig)) rows.push(this.buildAssignmentRow());
+        return rows;
+    }
+
+    // Renomme un ticket en respectant la limite Discord (2 renommages / 10 min par salon).
+    async renameChannel(channel, newName, reason) {
+        if (channel.name === newName) return { renamed: false };
+
+        const retryDelay = this.renameLimiter.getRetryDelay(channel.id);
+        if (retryDelay > 0) return { error: formatRenameLimitMessage(retryDelay) };
+
+        await channel.setName(newName, reason);
+        this.renameLimiter.record(channel.id);
+        return { renamed: true };
+    }
+
     async sendTicketChannelMessage(channel, ticketConfig, ownerId, displayName, extraDescriptionLines) {
         const ownerMention = `<@${ownerId}>`;
         const ticketEmbed = new EmbedBuilder()
@@ -209,7 +249,7 @@ class TicketService {
         await channel.send({
             content: `${ownerMention} | <@&${ticketConfig.staffRoleId}>`,
             embeds: [ticketEmbed],
-            components: [this.buildTicketControlsRow()],
+            components: this.buildTicketComponents(ticketConfig),
             allowedMentions: {
                 users: [ownerId],
                 roles: [ticketConfig.staffRoleId]
@@ -559,12 +599,18 @@ class TicketService {
         }
 
         const oldName = interaction.channel.name;
-        const newName = sanitizeChannelName(interaction.fields.getTextInputValue('new-name'));
-        await interaction.channel.setName(newName, `Ticket renommé par ${interaction.user.tag}`);
-        await interaction.reply({
-            content: `✅ Ticket renommé en **${newName}** (ancien nom : ${oldName}).`,
-            flags: MessageFlags.Ephemeral
-        });
+        const baseName = sanitizeChannelName(interaction.fields.getTextInputValue('new-name'));
+        // Sur un ticket à assignation, les emojis architecte (tête) et statut (fin) sont conservés.
+        const ticketConfig = this.client.config.tickets.find(ticket => ticket.id === metadata.categoryId);
+        const newName = getAssignmentConfig(ticketConfig)
+            ? buildChannelName({ ...splitChannelName(oldName), base: baseName })
+            : baseName;
+
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const renamed = await this.renameChannel(interaction.channel, newName, `Ticket renommé par ${interaction.user.tag}`);
+        if (renamed.error) return interaction.editReply(renamed.error);
+
+        await interaction.editReply(`✅ Ticket renommé en **${newName}** (ancien nom : ${oldName}).`);
 
         const embed = new EmbedBuilder()
             .setTitle('✏️ TICKET RENOMMÉ')

@@ -32,6 +32,28 @@
       "description": "Bonjour {user},",
       "details": "",
       "waitMessage": "Veuillez décrire votre demande en attendant une réponse."
+    },
+    {
+      "id": "architecture",
+      "label": "🔨 Architecture",
+      "emoji": "🔨",
+      "categoryId": "000000000000000000",
+      "staffRoleId": "000000000000000000",
+      "title": "🔨 Sprunk | Architecture",
+      "description": "Bonjour {user},",
+      "details": "",
+      "waitMessage": "Veuillez décrire votre demande en attendant une réponse.",
+      "assignment": {
+        "architects": {
+          "000000000000000000": "🦊"
+        },
+        "statuses": {
+          "pending": { "label": "En attente", "emoji": "⚪" },
+          "inProgress": { "label": "En cours", "emoji": "🟠" },
+          "paid": { "label": "Payé", "emoji": "💰" },
+          "done": { "label": "Terminé", "emoji": "✅" }
+        }
+      }
     }
   ],
   "missions": {

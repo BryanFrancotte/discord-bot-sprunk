@@ -4,12 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const { AttachmentBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const { isDiscordId } = require('../utils/config');
+const { RenameLimiter, formatRenameLimitMessage } = require('../utils/renameLimiter');
 const { getDisplayName, toTextChannelName } = require('../utils/text');
-
-// Discord n’autorise que deux renommages d’un même salon par tranche de 10 minutes ;
-// au-delà, discord.js met la requête en attente au lieu d’échouer.
-const RENAME_LIMIT = 2;
-const RENAME_WINDOW_MS = 10 * 60 * 1000;
 
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 
@@ -22,7 +18,7 @@ class StatusService {
     constructor(client, discordLogService) {
         this.client = client;
         this.discordLogService = discordLogService;
-        this.renameHistory = new Map();
+        this.renameLimiter = new RenameLimiter();
     }
 
     resolveStatus(state, overrides = {}) {
@@ -53,18 +49,11 @@ class StatusService {
     }
 
     getRenameRetryDelay(channelId, now = Date.now()) {
-        const recent = (this.renameHistory.get(channelId) ?? [])
-            .filter(timestamp => now - timestamp < RENAME_WINDOW_MS);
-        this.renameHistory.set(channelId, recent);
-
-        if (recent.length < RENAME_LIMIT) return 0;
-        return RENAME_WINDOW_MS - (now - recent[0]);
+        return this.renameLimiter.getRetryDelay(channelId, now);
     }
 
     recordRename(channelId, now = Date.now()) {
-        const history = this.renameHistory.get(channelId) ?? [];
-        history.push(now);
-        this.renameHistory.set(channelId, history);
+        this.renameLimiter.record(channelId, now);
     }
 
     resolveImage(status) {
@@ -125,10 +114,7 @@ class StatusService {
         if (needsRename) {
             const retryDelay = this.getRenameRetryDelay(channel.id);
             if (retryDelay > 0) {
-                return interaction.editReply(
-                    `⏳ Discord limite le renommage d’un salon à ${RENAME_LIMIT} fois par tranche de 10 minutes. ` +
-                    `Réessayez dans ${Math.ceil(retryDelay / 60000)} min — rien n’a été modifié.`
-                );
+                return interaction.editReply(formatRenameLimitMessage(retryDelay));
             }
             await channel.setName(status.channelName, `Statut « ${status.label} » défini par ${interaction.user.tag}`);
             this.recordRename(channel.id);

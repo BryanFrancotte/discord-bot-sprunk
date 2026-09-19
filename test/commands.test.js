@@ -9,7 +9,7 @@ test('les commandes slash sont sérialisables et ont des noms uniques', () => {
     const serialized = commands.map(command => command.data.toJSON());
     const names = serialized.map(command => command.name);
 
-    assert.deepEqual(names.sort(), ['acquire', 'distributeur', 'mission', 'reglement', 'statut', 'template', 'troll']);
+    assert.deepEqual(names.sort(), ['acquire', 'assigner', 'distributeur', 'mission', 'reglement', 'statut', 'template', 'troll']);
     assert.equal(new Set(names).size, names.length);
 });
 
