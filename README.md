@@ -62,7 +62,7 @@ Le rôle du bot doit être placé au-dessus des rôles qu’il doit mentionner o
 - `/distributeur` : publie anonymement le message d’information configuré dans le code.
 - `/reglement` : publie le règlement dans le salon courant, avec un bouton « Lu et Approuvé » qui attribue le rôle membre (`rules.memberRoleId`). Réservé aux administrateurs.
 - `/troll` : envoie une série limitée de messages privés ; désactivée par défaut.
-- `/acquire` : transforme le salon courant (non créé par le bot) en ticket géré, avec toutes les actions d’un ticket normal.
+- `/acquire` : transforme le salon courant (non créé par le bot) en ticket géré, avec toutes les actions d’un ticket normal. Sans option `proprietaire`, c’est l’auteur de la commande qui devient propriétaire ; `silencieux:true` déduit la catégorie du ticket de la catégorie Discord du salon (aucun menu) et poste le message de ticket sans mention ni notification.
 - `/assigner` : dans un ticket Architecture, assigne le ticket à un architecte (emoji de l'architecte en tête du nom du salon, emoji de statut en fin). Sans option, l'architecte s'assigne lui-même ; choisir un autre architecte est réservé au staff. Les boutons « Assigner » et « Statut » du ticket font la même chose.
 - `/statut` : indique si le Sprunk est ouvert ou fermé en renommant le salon de statut (`status.channelId`) et en y publiant le panneau correspondant (mention de rôle, message et image). Le bot doit pouvoir gérer ce salon. Les visuels par défaut sont dans `assets/`.
 

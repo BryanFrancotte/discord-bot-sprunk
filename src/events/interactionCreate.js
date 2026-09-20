@@ -46,8 +46,12 @@ module.exports = function registerInteractionCreate(client) {
                 } else if (interaction.customId === 'ticket:status-confirm') {
                     await client.services.assignment.setStatus(interaction, interaction.values[0]);
                 } else if (interaction.customId.startsWith('ticket:acquire-confirm:')) {
-                    const ownerId = interaction.customId.slice('ticket:acquire-confirm:'.length);
-                    await client.services.tickets.acquireChannel(interaction, interaction.values[0], ownerId);
+                    const acquire = client.services.tickets.parseAcquireCustomId(interaction.customId);
+                    if (acquire) {
+                        await client.services.tickets.acquireChannel(interaction, interaction.values[0], acquire.ownerId, {
+                            silent: acquire.silent
+                        });
+                    }
                 }
                 return;
             }

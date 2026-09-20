@@ -96,11 +96,27 @@ Une catégorie active l'assignation en déclarant un bloc `assignment` (pas de c
 
 `TicketService` pose l'emoji « En attente » à la création, ajoute la rangée de boutons via `buildTicketComponents` (la rangée principale est déjà à 5 boutons, le maximum Discord), et conserve les emojis dans `renameTicket`. Tout renommage de ticket passe par `TicketService.renameChannel`, qui applique le `RenameLimiter` partagé (`utils/renameLimiter.js`, aussi utilisé par `StatusService`).
 
+### Acquérir un salon existant (`/acquire`)
+
+`TicketService.acquireChannel(interaction, categoryId, ownerId, options)` sert deux appelants avec la même méthode :
+
+- depuis le menu de catégorie (interaction de composant) — l'appelant ne passe rien, la méthode fait elle-même le `deferUpdate()` ;
+- depuis `/acquire silencieux:true` (interaction de commande, déjà `deferReply`) — l'appelant passe `{ deferred: true }`.
+
+Dans les deux cas la réponse finale passe par `interaction.editReply({ content, components: [] })`, ce qui retire le menu s'il y en avait un. Le mode silencieux (`{ silent: true }`) ne change que deux choses : la catégorie est déduite du salon au lieu d'être demandée, et le message de ticket est posté sans mention (`allowedMentions: { parse: [] }`) et sans notification (`MessageFlags.SuppressNotifications`). Permissions et journalisation restent identiques à une acquisition normale.
+
+Les deux helpers purs correspondants sont dans `utils/ticketMessages.js` (testés dans `test/ticketAcquire.test.js`) :
+
+- `findTicketConfigByChannelCategory(tickets, parentId)` — déduit la catégorie du ticket de la catégorie Discord qui contient le salon, en comparant à `categoryId`. `null` ⇒ `/acquire` retombe sur le menu.
+- `findTicketControlsMessage(messages, botId)` / `isTicketControlsMessage` — retrouvent le message à boutons déjà posté par le bot dans le salon. Le marqueur est le bouton `ticket:close`, présent sur toutes les variantes de `buildTicketComponents` ; en cas de doublons c'est le **plus ancien** qui est retenu (le plus haut dans l'historique).
+
+`sendTicketChannelMessage(..., { silent, reuseExisting })` centralise l'envoi et retourne `{ message, reused }`. Avec `reuseExisting: true` (seul `acquireChannel` l'active), il édite le message existant au lieu d'en poster un second — Discord ne permettant pas d'insérer un message ailleurs qu'à la fin d'un salon, c'est la seule façon de garder un message à boutons unique et haut placé. Les créations de ticket ne l'activent pas : le salon vient d'être créé, la requête d'historique serait un appel API inutile.
+
 ### Faire persister un choix entre deux interactions
 
 Une commande slash et le composant qu'elle affiche (menu, bouton) sont deux interactions Discord séparées — on ne peut pas garder une variable en mémoire entre les deux. Le patron du projet est d'encoder l'information dans le `customId` du composant plutôt que dans un état serveur.
 
-Exemple : `/acquire` (`commands/acquire.js`) capture le propriétaire choisi, puis `TicketService.showAcquireCategoryMenu` construit un menu dont le `customId` est `ticket:acquire-confirm:<ownerId>`. Quand le menu est utilisé, `interactionCreate.js` retrouve l'ID avec `customId.slice('ticket:acquire-confirm:'.length)` et le repasse à `TicketService.acquireChannel`. Même logique que le topic d'un ticket (`sprunk-ticket|owner=...|category=...`, §9) : plutôt qu'une session en mémoire qui ne survivrait pas à un redémarrage, l'état nécessaire est toujours ré-encodé dans ce que Discord retransmet (`customId`, `topic`).
+Exemple : `/acquire` (`commands/acquire.js`) capture le propriétaire choisi et le mode silencieux, puis `TicketService.showAcquireCategoryMenu` construit un menu dont le `customId` est produit par `buildAcquireCustomId` (`ticket:acquire-confirm:<ownerId>`, suffixé `:silent` en mode silencieux). Quand le menu est utilisé, `interactionCreate.js` relit les deux informations avec `TicketService.parseAcquireCustomId` et les repasse à `TicketService.acquireChannel`. Même logique que le topic d'un ticket (`sprunk-ticket|owner=...|category=...`, §9) : plutôt qu'une session en mémoire qui ne survivrait pas à un redémarrage, l'état nécessaire est toujours ré-encodé dans ce que Discord retransmet (`customId`, `topic`).
 
 Si vous ajoutez un nouveau menu/bouton qui a besoin d'un contexte (un ID, une catégorie…), suivez ce patron plutôt que d'introduire une `Map` en mémoire côté service — sauf si l'état doit justement survivre à l'interaction (voir `TicketService.closingTickets` pour un cas où une `Map` en mémoire est le bon choix, parce qu'elle ne fait que dédupliquer des clics rapprochés, pas porter une donnée métier).
 
@@ -160,6 +176,7 @@ Quand vous touchez à un service, ajoutez au minimum un test qui couvre la nouve
 
 - Comportement d'une commande → `src/commands/<nom>.js`, puis le service qu'elle appelle.
 - Format du topic d'un salon ticket (`sprunk-ticket|owner=...|category=...`) → `TicketService.buildTopic` / `parseTopic`.
+- Retrouver/déduire les éléments d'une acquisition (catégorie déduite du salon, message à boutons existant) → `utils/ticketMessages.js`.
 - Calcul des dates Paris (heure d'été/hiver) → `utils/date.js`, testé dans `test/date.test.js`.
 - Qui a le droit de faire quoi → `utils/permissions.js` + les champs `reassignRoleId` / `distributorRoleId` de `config.json`.
 - Visuels du panneau de statut → `assets/`, référencés par `status.<état>.image` dans `config.json` (chemin relatif à la racine du dépôt, ou URL `https://`). `StatusService.resolveImage` joint le fichier local (`attachment://`) ou passe l'URL telle quelle ; un fichier absent n'empêche pas la publication. Ces images sont versionnées et déployées avec le code, contrairement à `config.json`.

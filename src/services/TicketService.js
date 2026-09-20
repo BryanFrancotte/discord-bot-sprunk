@@ -20,6 +20,7 @@ const { getDisplayName, sanitizeChannelName } = require('../utils/text');
 const { isDiscordId } = require('../utils/config');
 const { RenameLimiter, formatRenameLimitMessage } = require('../utils/renameLimiter');
 const { buildChannelName, getAssignmentConfig, splitChannelName } = require('../utils/ticketAssignment');
+const { findTicketControlsMessage } = require('../utils/ticketMessages');
 
 const OWNER_PERMISSIONS = [
     PermissionFlagsBits.ViewChannel,
@@ -233,7 +234,11 @@ class TicketService {
         return { renamed: true };
     }
 
-    async sendTicketChannelMessage(channel, ticketConfig, ownerId, displayName, extraDescriptionLines) {
+    // `silent` : message posté sans mention ni notification (mode silencieux de `/acquire`).
+    // `reuseExisting` : si le bot a déjà posté un message à boutons dans ce salon, on met celui-là
+    // à jour au lieu d'en empiler un second.
+    async sendTicketChannelMessage(channel, ticketConfig, ownerId, displayName, extraDescriptionLines, options = {}) {
+        const { silent = false, reuseExisting = false } = options;
         const ownerMention = `<@${ownerId}>`;
         const ticketEmbed = new EmbedBuilder()
             .setTitle(ticketConfig.title)
@@ -246,19 +251,43 @@ class TicketService {
             ].join('\n'))
             .setColor(this.client.config.bot.color);
 
-        await channel.send({
+        const payload = {
             content: `${ownerMention} | <@&${ticketConfig.staffRoleId}>`,
             embeds: [ticketEmbed],
             components: this.buildTicketComponents(ticketConfig),
-            allowedMentions: {
-                users: [ownerId],
-                roles: [ticketConfig.staffRoleId]
-            }
-        });
+            allowedMentions: silent
+                ? { parse: [] }
+                : { users: [ownerId], roles: [ticketConfig.staffRoleId] }
+        };
+
+        const existing = reuseExisting ? await this.findExistingControlsMessage(channel) : null;
+        if (existing) return { message: await existing.edit(payload), reused: true };
+
+        const message = await channel.send(silent ? { ...payload, flags: MessageFlags.SuppressNotifications } : payload);
+        return { message, reused: false };
     }
 
-    async showAcquireCategoryMenu(interaction, ownerId) {
-        const options = this.client.config.tickets.map(ticket => {
+    // Cherche dans l'historique récent le message à boutons déjà posté par le bot (null s'il n'y en a pas).
+    async findExistingControlsMessage(channel) {
+        if (typeof channel?.messages?.fetch !== 'function') return null;
+        const messages = await channel.messages.fetch({ limit: 100 }).catch(() => null);
+        if (!messages) return null;
+        return findTicketControlsMessage(messages.values(), this.client.user?.id);
+    }
+
+    buildAcquireCustomId(ownerId, silent = false) {
+        return silent ? `ticket:acquire-confirm:${ownerId}:silent` : `ticket:acquire-confirm:${ownerId}`;
+    }
+
+    parseAcquireCustomId(customId) {
+        const match = /^ticket:acquire-confirm:(\d{17,20})(:silent)?$/.exec(customId || '');
+        if (!match) return null;
+        return { ownerId: match[1], silent: Boolean(match[2]) };
+    }
+
+    async showAcquireCategoryMenu(interaction, ownerId, options = {}) {
+        const { silent = false } = options;
+        const menuOptions = this.client.config.tickets.map(ticket => {
             const option = {
                 label: ticket.label.slice(0, 100),
                 value: ticket.id,
@@ -270,38 +299,41 @@ class TicketService {
 
         const row = new ActionRowBuilder().addComponents(
             new StringSelectMenuBuilder()
-                .setCustomId(`ticket:acquire-confirm:${ownerId}`)
+                .setCustomId(this.buildAcquireCustomId(ownerId, silent))
                 .setPlaceholder('Sélectionnez une catégorie…')
-                .addOptions(options)
+                .addOptions(menuOptions)
         );
 
-        await interaction.editReply({
-            content: `Choisissez la catégorie du ticket pour <@${ownerId}> :`,
-            components: [row]
-        });
+        // Le menu n'apparaît en mode silencieux que si la catégorie Discord du salon n'a pas permis de déduire la catégorie du ticket.
+        const content = silent
+            ? `ℹ️ La catégorie Discord de ce salon ne correspond à aucune catégorie de ticket. Choisissez-la pour <@${ownerId}> :`
+            : `Choisissez la catégorie du ticket pour <@${ownerId}> :`;
+
+        await interaction.editReply({ content, components: [row] });
     }
 
-    async acquireChannel(interaction, categoryId, ownerId) {
+    // `silent` : pas de menu de catégorie (déduite du salon) et message de ticket sans ping.
+    // `deferred` : la réponse éphémère a déjà été différée par la commande appelante.
+    async acquireChannel(interaction, categoryId, ownerId, options = {}) {
+        const { silent = false, deferred = false } = options;
+
         if (!canManageBot(interaction.member, this.client.config)) {
-            return interaction.reply({ content: '❌ Non autorisé.', flags: MessageFlags.Ephemeral });
+            return deferred
+                ? interaction.editReply({ content: '❌ Non autorisé.', components: [] })
+                : interaction.reply({ content: '❌ Non autorisé.', flags: MessageFlags.Ephemeral });
         }
 
-        await interaction.deferUpdate();
+        if (!deferred) await interaction.deferUpdate();
+        const respond = content => interaction.editReply({ content, components: [] });
 
         const ticketConfig = this.client.config.tickets.find(ticket => ticket.id === categoryId);
         if (!ticketConfig || !isDiscordId(ticketConfig.staffRoleId)) {
-            return interaction.followUp({
-                content: '❌ Catégorie introuvable ou mal configurée.',
-                flags: MessageFlags.Ephemeral
-            });
+            return respond('❌ Catégorie introuvable ou mal configurée.');
         }
 
         const channel = interaction.channel;
         if (this.parseTopic(channel.topic)) {
-            return interaction.followUp({
-                content: '❌ Ce salon est déjà un ticket géré par le bot.',
-                flags: MessageFlags.Ephemeral
-            });
+            return respond('❌ Ce salon est déjà un ticket géré par le bot.');
         }
 
         const reason = `Salon acquis comme ticket par ${interaction.user.tag}`;
@@ -322,19 +354,17 @@ class TicketService {
                 `Acquis par : **${acquiredByName}** (${interaction.user.tag})`,
                 `Propriétaire : <@${ownerId}>`,
                 `Catégorie : **${ticketConfig.label}**`,
+                silent ? 'Mode : **silencieux**' : null,
                 `Salon : ${channel}`
-            ].join('\n'))
+            ].filter(Boolean).join('\n'))
             .setTimestamp();
         await this.discordLogService.send(interaction.guild, logEmbed);
 
-        await this.sendTicketChannelMessage(channel, ticketConfig, ownerId, ownerDisplayName, [
+        const { reused } = await this.sendTicketChannelMessage(channel, ticketConfig, ownerId, ownerDisplayName, [
             `**Acquis par :** ${acquiredByName}`
-        ]);
+        ], { silent, reuseExisting: true });
 
-        await interaction.followUp({
-            content: `✅ Salon acquis comme ticket **${ticketConfig.label}**.`,
-            flags: MessageFlags.Ephemeral
-        });
+        return respond(`✅ Salon acquis comme ticket **${ticketConfig.label}**${reused ? ' (message à boutons existant mis à jour)' : ''}.`);
     }
 
     async showArchitectureQuestionnaire(interaction) {
