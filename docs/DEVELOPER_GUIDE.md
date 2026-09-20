@@ -105,6 +105,16 @@ Une catégorie active l'assignation en déclarant un bloc `assignment` (pas de c
 
 Dans les deux cas la réponse finale passe par `interaction.editReply({ content, components: [] })`, ce qui retire le menu s'il y en avait un. Le mode silencieux (`{ silent: true }`) ne change que deux choses : la catégorie est déduite du salon au lieu d'être demandée, et le message de ticket est posté sans mention (`allowedMentions: { parse: [] }`) et sans notification (`MessageFlags.SuppressNotifications`). Permissions et journalisation restent identiques à une acquisition normale.
 
+Sur un salon **déjà géré** (`parseTopic(channel.topic)` non nul), `acquireChannel` ne refuse pas : `isUpdate` bascule la méthode en mise à jour, ce qui permet de réécrire l'embed d'un ticket existant. Trois différences seulement :
+
+- permissions appliquées via `applyTicketPermissions(..., { replace: false })`, qui fait un `permissionOverwrites.edit` par entrée au lieu du `set` global — un `set` supprimerait les overwrites des membres ajoutés via ➕ Ajouter ;
+- `setTopic` n'est appelé que si le topic change réellement (il est soumis à la même limite Discord que le renommage) ;
+- libellés du log, de l'embed et de la réponse éphémère (`♻️ TICKET MIS À JOUR` / « mis à jour »).
+
+`commands/acquire.js` relit le topic pour en tirer les valeurs par défaut : propriétaire actuel (`client.users.fetch`, `null` toléré) et catégorie actuelle, cette dernière prioritaire sur `findTicketConfigByChannelCategory` en mode silencieux.
+
+`buildTicketPermissionOverwrites` déclare un `type` explicite (`OverwriteType.Role` / `OverwriteType.Member`) sur chaque entrée, et `applyTicketPermissions` le repasse à `edit`. Sans lui, discord.js résout l'ID via son cache local (`guild.roles.cache` puis `client.users.cache`) et lève `InvalidType` sur un propriétaire relu du topic que le bot n'a pas vu récemment — c'est la cause racine décrite dans `docs/BUGFIX_REASSIGN_PERMISSIONS.md`, dont `reassignTicket` reste à corriger de la même façon.
+
 Les deux helpers purs correspondants sont dans `utils/ticketMessages.js` (testés dans `test/ticketAcquire.test.js`) :
 
 - `findTicketConfigByChannelCategory(tickets, parentId)` — déduit la catégorie du ticket de la catégorie Discord qui contient le salon, en comparant à `categoryId`. `null` ⇒ `/acquire` retombe sur le menu.

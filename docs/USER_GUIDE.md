@@ -69,17 +69,28 @@ Seuls les membres du rôle architecte **ayant un emoji dans `assignment.architec
 Si un salon a été créé autrement que par le panel — manuellement, par un autre bot, ou avant l'installation de SPRUNK — il n'est pas reconnu comme un ticket : aucun des boutons ci-dessus ne fonctionne dessus. `/acquire` permet de le rattacher :
 
 1. Se placer dans le salon à convertir.
-2. Lancer `/acquire` — l'option `proprietaire` indique le membre considéré comme propriétaire du ticket ; **si elle est omise, c'est vous** (la personne qui tape la commande).
+2. Lancer `/acquire` — l'option `proprietaire` indique le membre considéré comme propriétaire du ticket ; **si elle est omise, c'est vous** (la personne qui tape la commande), ou le propriétaire actuel si le salon est déjà un ticket.
 3. Choisir la catégorie dans le menu qui apparaît (les mêmes catégories que dans le panel).
 
 Le bot réinitialise alors les permissions du salon comme un ticket normal (propriétaire, rôle staff, bot), enregistre le sujet du salon pour que **Fermer / Réassigner / Renommer / Ajouter / Retirer** fonctionnent, poste le message de ticket avec ses boutons, et journalise l'acquisition dans le salon de logs.
+
+#### Rafraîchir un ticket déjà géré
+
+Lancée dans un salon **déjà géré par le bot**, `/acquire` ne refuse plus : elle met le ticket à jour. C'est la façon de récupérer un ticket dont le message a été supprimé, dont l'embed est resté sur d'anciennes informations, ou dont la catégorie a changé dans `config.json` :
+
+- l'embed et les boutons du message de ticket sont **réécrits** avec le titre, la description et les boutons actuels de la catégorie ;
+- le propriétaire et la catégorie par défaut sont **ceux du ticket en cours** — ne renseignez `proprietaire` ou ne changez de catégorie que si vous voulez justement les modifier ;
+- les permissions du propriétaire, du rôle staff et du bot sont réappliquées, **sans éjecter** les membres ajoutés au ticket via ➕ Ajouter (contrairement à une première acquisition, qui remet les permissions du salon à zéro) ;
+- l'opération est journalisée sous le titre **♻️ TICKET MIS À JOUR**.
+
+Si aucun message à boutons du bot n'existe plus dans le salon, un nouveau est posté et le bot le signale.
 
 #### Mode silencieux (`silencieux:true`)
 
 `/acquire silencieux:true` acquiert le salon **sans aucune question** :
 
-- le propriétaire est la personne qui a tapé la commande (sauf si `proprietaire` est renseigné) ;
-- **aucun menu de catégorie** : la catégorie du ticket est déduite de la catégorie Discord dans laquelle se trouve déjà le salon (le `categoryId` d'une des catégories de `config.json`). Le salon n'est pas déplacé ;
+- le propriétaire est la personne qui a tapé la commande (sauf si `proprietaire` est renseigné, ou si le salon est déjà un ticket : c'est alors son propriétaire actuel) ;
+- **aucun menu de catégorie** : la catégorie du ticket est celle du ticket en cours s'il y en a un, sinon elle est déduite de la catégorie Discord dans laquelle se trouve déjà le salon (le `categoryId` d'une des catégories de `config.json`). Le salon n'est pas déplacé ;
 - le message de ticket est posté **sans mentionner** le propriétaire ni le rôle staff, et sans notification.
 
 Si la catégorie Discord du salon ne correspond à aucune catégorie de `config.json`, le bot le signale et affiche le menu pour la choisir ; le reste du mode silencieux (pas de mention, pas de notification) reste appliqué. Les permissions sont réinitialisées et l'acquisition est journalisée comme pour une acquisition normale.
@@ -88,7 +99,7 @@ Si la catégorie Discord du salon ne correspond à aucune catégorie de `config.
 
 Si le bot a déjà posté un message à boutons dans le salon (acquisition précédente, ticket rattaché puis détaché…), il **met à jour ce message** au lieu d'en poster un second — c'est le plus ancien du salon qui est réutilisé, donc celui situé le plus haut dans l'historique. S'il n'y en a aucun, un nouveau message est posté normalement.
 
-`/acquire` est réservée aux administrateurs et au rôle `reassignRoleId`, et refuse d'agir si le salon est déjà un ticket géré par le bot.
+`/acquire` est réservée aux administrateurs et au rôle `reassignRoleId`.
 
 ## 2. Missions
 
@@ -126,7 +137,7 @@ Les rappels sont automatiquement nettoyés (messages supprimés) quelques minute
 | Commande | Effet | Qui peut l'utiliser |
 |---|---|---|
 | `/distributeur` | Publie l'annonce standard d'installation d'un distributeur Sprunk dans le salon courant | Rôle `distributorRoleId`, administrateurs, ou rôle `reassignRoleId` |
-| `/acquire` | Transforme le salon courant en ticket géré par le bot ; `silencieux:true` acquiert sans menu ni mention (voir §1) | Administrateurs ou rôle `reassignRoleId` |
+| `/acquire` | Transforme le salon courant en ticket géré par le bot, ou met à jour l'embed et les permissions d'un ticket existant ; `silencieux:true` acquiert sans menu ni mention (voir §1) | Administrateurs ou rôle `reassignRoleId` |
 | `/assigner` | Assigne le ticket courant à un architecte (voir §1) | Administrateurs ou rôle `reassignRoleId` pour n'importe quel architecte ; un architecte pour lui-même |
 | `/statut` | Indique si le Sprunk est ouvert ou fermé : renomme le salon de statut et met à jour son message (voir ci-dessous) | Administrateurs ou rôle `reassignRoleId` |
 | `/reglement` | Publie le règlement dans le salon courant, avec un bouton qui donne le rôle membre (voir ci-dessous) | Administrateurs |
@@ -272,7 +283,7 @@ Un tableau, une entrée par catégorie de ticket. Chaque entrée a besoin au min
 - **« Non autorisé »** sur une commande — vérifiez que le membre a le rôle attendu (`reassignRoleId` ou `distributorRoleId` selon la commande) ou est administrateur.
 - **Un ticket ne se ferme pas** — le bouton Fermer est bloqué si une fermeture est déjà en cours sur ce salon (message « ⏳ Ce ticket est déjà en cours de fermeture »). Attendre la fin de la suppression du salon.
 - **Un rôle staff « mal configuré »** — le `staffRoleId` de la catégorie dans `config.json` n'est pas un ID Discord valide ; corrigez-le dans `config.json`.
-- **`/acquire` refuse d'agir** — soit le salon est déjà reconnu comme un ticket (topic déjà rattaché), soit la catégorie choisie a un `staffRoleId` invalide dans `config.json`.
+- **`/acquire` refuse d'agir** — la catégorie choisie a un `staffRoleId` invalide dans `config.json`. (Un salon déjà reconnu comme ticket n'est plus un refus : la commande le met à jour, voir §1.)
 - **`/acquire silencieux:true` affiche quand même le menu** — le salon n'est pas rangé dans une catégorie Discord déclarée comme `categoryId` d'une catégorie de tickets ; déplacez le salon dans la bonne catégorie, ou choisissez simplement la catégorie dans le menu.
 - **« Aucun emoji configuré » à l'assignation** — l'architecte a bien le rôle mais n'a pas d'entrée dans `assignment.architects` ; ajoutez son ID et son emoji dans `config.json` (rechargé à chaud).
 - **Assigner / Statut / Renommer répond « ⏳ … réessayez dans X min »** — le ticket a déjà été renommé 2 fois dans les 10 dernières minutes (limite Discord). Attendre le délai indiqué.

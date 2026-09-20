@@ -9,6 +9,7 @@ const {
     EmbedBuilder,
     MessageFlags,
     ModalBuilder,
+    OverwriteType,
     PermissionFlagsBits,
     StringSelectMenuBuilder,
     TextInputBuilder,
@@ -34,6 +35,17 @@ const STAFF_PERMISSIONS = [
     ...OWNER_PERMISSIONS,
     PermissionFlagsBits.ManageMessages
 ];
+
+// Convertit une entrée de permissions (`allow`/`deny` sous forme de bits) en objet
+// `{ NomDeLaPermission: true|false }` attendu par `permissionOverwrites.edit`.
+function toPermissionOptions(overwrite) {
+    const options = {};
+    for (const [name, flag] of Object.entries(PermissionFlagsBits)) {
+        if (overwrite.allow?.includes(flag)) options[name] = true;
+        else if (overwrite.deny?.includes(flag)) options[name] = false;
+    }
+    return options;
+}
 
 class TicketService {
     constructor(client, ticketLogService, discordLogService) {
@@ -150,22 +162,28 @@ class TicketService {
         return { channel, displayName };
     }
 
+    // Le `type` est toujours explicite : sans lui, discord.js devine rôle ou membre via son cache
+    // local, et échoue sur un propriétaire que le bot n'a pas « vu » récemment (ID relu du topic).
     buildTicketPermissionOverwrites(interaction, ticketConfig, ownerId = interaction.user.id) {
         return [
             {
                 id: interaction.guild.id,
+                type: OverwriteType.Role,
                 deny: [PermissionFlagsBits.ViewChannel]
             },
             {
                 id: ownerId,
+                type: OverwriteType.Member,
                 allow: OWNER_PERMISSIONS
             },
             {
                 id: ticketConfig.staffRoleId,
+                type: OverwriteType.Role,
                 allow: STAFF_PERMISSIONS
             },
             {
                 id: this.client.user.id,
+                type: OverwriteType.Member,
                 allow: [
                     ...STAFF_PERMISSIONS,
                     PermissionFlagsBits.ManageChannels
@@ -312,8 +330,28 @@ class TicketService {
         await interaction.editReply({ content, components: [row] });
     }
 
+    // Applique les permissions d'un ticket sur un salon.
+    // `replace` : remplace toutes les permissions existantes (acquisition d'un salon quelconque).
+    // Sinon, seules celles du propriétaire, du staff et du bot sont réécrites, pour ne pas
+    // éjecter les membres ajoutés au ticket via le bouton « Ajouter ».
+    async applyTicketPermissions(channel, interaction, ticketConfig, ownerId, reason, { replace }) {
+        const overwrites = this.buildTicketPermissionOverwrites(interaction, ticketConfig, ownerId);
+        if (replace) {
+            await channel.permissionOverwrites.set(overwrites, reason);
+            return;
+        }
+        for (const overwrite of overwrites) {
+            await channel.permissionOverwrites.edit(overwrite.id, toPermissionOptions(overwrite), {
+                type: overwrite.type,
+                reason
+            });
+        }
+    }
+
     // `silent` : pas de menu de catégorie (déduite du salon) et message de ticket sans ping.
     // `deferred` : la réponse éphémère a déjà été différée par la commande appelante.
+    // Sur un salon déjà géré par le bot, l'acquisition devient une mise à jour : permissions,
+    // topic et message à boutons sont réécrits au lieu d'être refusés.
     async acquireChannel(interaction, categoryId, ownerId, options = {}) {
         const { silent = false, deferred = false } = options;
 
@@ -332,26 +370,26 @@ class TicketService {
         }
 
         const channel = interaction.channel;
-        if (this.parseTopic(channel.topic)) {
-            return respond('❌ Ce salon est déjà un ticket géré par le bot.');
-        }
+        const isUpdate = Boolean(this.parseTopic(channel.topic));
 
-        const reason = `Salon acquis comme ticket par ${interaction.user.tag}`;
-        await channel.permissionOverwrites.set(
-            this.buildTicketPermissionOverwrites(interaction, ticketConfig, ownerId),
-            reason
-        );
-        await channel.setTopic(this.buildTopic(ownerId, ticketConfig.id), reason);
+        const reason = isUpdate
+            ? `Ticket mis à jour par ${interaction.user.tag}`
+            : `Salon acquis comme ticket par ${interaction.user.tag}`;
+        await this.applyTicketPermissions(channel, interaction, ticketConfig, ownerId, reason, { replace: !isUpdate });
+
+        // `setTopic` est limité par Discord : on ne l'appelle que si le topic change réellement.
+        const topic = this.buildTopic(ownerId, ticketConfig.id);
+        if (channel.topic !== topic) await channel.setTopic(topic, reason);
 
         const acquiredByName = getDisplayName(interaction.member, interaction.user);
         const ownerMember = await interaction.guild.members.fetch(ownerId).catch(() => null);
         const ownerDisplayName = ownerMember ? getDisplayName(ownerMember, ownerMember.user) : `<@${ownerId}>`;
 
         const logEmbed = new EmbedBuilder()
-            .setTitle('📥 TICKET ACQUIS')
+            .setTitle(isUpdate ? '♻️ TICKET MIS À JOUR' : '📥 TICKET ACQUIS')
             .setColor(this.client.config.bot.color)
             .setDescription([
-                `Acquis par : **${acquiredByName}** (${interaction.user.tag})`,
+                `${isUpdate ? 'Mis à jour' : 'Acquis'} par : **${acquiredByName}** (${interaction.user.tag})`,
                 `Propriétaire : <@${ownerId}>`,
                 `Catégorie : **${ticketConfig.label}**`,
                 silent ? 'Mode : **silencieux**' : null,
@@ -361,9 +399,12 @@ class TicketService {
         await this.discordLogService.send(interaction.guild, logEmbed);
 
         const { reused } = await this.sendTicketChannelMessage(channel, ticketConfig, ownerId, ownerDisplayName, [
-            `**Acquis par :** ${acquiredByName}`
+            `**${isUpdate ? 'Mis à jour' : 'Acquis'} par :** ${acquiredByName}`
         ], { silent, reuseExisting: true });
 
+        if (isUpdate) {
+            return respond(`✅ Ticket **${ticketConfig.label}** mis à jour${reused ? '' : ' (aucun message à boutons trouvé : un nouveau a été posté)'}.`);
+        }
         return respond(`✅ Salon acquis comme ticket **${ticketConfig.label}**${reused ? ' (message à boutons existant mis à jour)' : ''}.`);
     }
 

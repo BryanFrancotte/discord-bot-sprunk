@@ -75,11 +75,17 @@ function buildService({ existingMessage = null } = {}) {
     const channel = {
         id: 'chan-1',
         topic: null,
+        topicWrites: 0,
         parentId: '222222222222222222',
+        permissionSets: [],
+        permissionEdits: [],
         toString: () => '#salon',
         messages: { fetch: async () => new Map(fetched.map((message, index) => [String(index), message])) },
-        permissionOverwrites: { set: async () => {} },
-        setTopic: async topic => { channel.topic = topic; },
+        permissionOverwrites: {
+            set: async overwrites => { channel.permissionSets.push(overwrites); },
+            edit: async (id, options, extra) => { channel.permissionEdits.push({ id, options, ...extra }); }
+        },
+        setTopic: async topic => { channel.topic = topic; channel.topicWrites += 1; },
         send: async payload => { sent.push(payload); return { ...payload, editedTimestamp: null }; }
     };
     if (existingMessage) {
@@ -138,13 +144,51 @@ test('un message a boutons deja poste par le bot est mis a jour au lieu d en pos
     assert.match(interaction.replies.at(-1).content, /mis à jour/);
 });
 
-test('un salon deja ticket ne peut pas etre acquis une seconde fois', async () => {
-    const { service, channel, sent } = buildService();
+test('acquerir un salon deja ticket met a jour son message a boutons', async () => {
+    const existingMessage = buildControlsMessage('bot-1', 100);
+    const { service, channel, sent, edited } = buildService({ existingMessage });
     channel.topic = 'sprunk-ticket|owner=123456789012345678|category=direction';
     const interaction = buildInteraction(channel);
 
     await service.acquireChannel(interaction, 'architecture', '123456789012345678', { deferred: true });
 
     assert.equal(sent.length, 0);
-    assert.match(interaction.replies.at(-1).content, /déjà un ticket/);
+    assert.equal(edited.length, 1);
+    assert.match(edited[0].embeds[0].data.description, /Mis à jour par/);
+    assert.equal(channel.topic, 'sprunk-ticket|owner=123456789012345678|category=architecture');
+    assert.match(interaction.replies.at(-1).content, /mis à jour/);
+});
+
+test('la mise a jour d un ticket ne remplace pas toutes les permissions du salon', async () => {
+    const existingMessage = buildControlsMessage('bot-1', 100);
+    const { service, channel, edited } = buildService({ existingMessage });
+    channel.topic = 'sprunk-ticket|owner=123456789012345678|category=architecture';
+    const interaction = buildInteraction(channel);
+
+    await service.acquireChannel(interaction, 'architecture', '123456789012345678', { deferred: true });
+
+    // Les membres ajoutés manuellement au ticket doivent survivre : pas de `set`, seulement des `edit`.
+    assert.equal(channel.permissionSets.length, 0);
+    assert.deepEqual(channel.permissionEdits.map(entry => entry.id), [
+        'guild-1',
+        '123456789012345678',
+        '888888888888888888',
+        'bot-1'
+    ]);
+    assert.equal(channel.permissionEdits[0].options.ViewChannel, false);
+    assert.equal(channel.permissionEdits[1].options.ViewChannel, true);
+    // Le type est toujours transmis : sans lui, discord.js dépend de son cache pour résoudre l'ID.
+    assert.deepEqual(channel.permissionEdits.map(entry => entry.type), [0, 1, 0, 1]);
+    assert.equal(edited.length, 1);
+});
+
+test('le topic n est pas reecrit quand il est deja a jour', async () => {
+    const existingMessage = buildControlsMessage('bot-1', 100);
+    const { service, channel } = buildService({ existingMessage });
+    channel.topic = 'sprunk-ticket|owner=123456789012345678|category=architecture';
+    const interaction = buildInteraction(channel);
+
+    await service.acquireChannel(interaction, 'architecture', '123456789012345678', { deferred: true });
+
+    assert.equal(channel.topicWrites, 0);
 });
