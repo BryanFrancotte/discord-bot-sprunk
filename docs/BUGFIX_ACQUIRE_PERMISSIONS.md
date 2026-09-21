@@ -122,7 +122,7 @@ Dans `test/ticketAcquire.test.js` :
 ## Reste à faire
 
 - **`addUsersToTicket`** (`src/services/TicketService.js`) appelle `permissionOverwrites.edit(userId, …)` **sans `type`** : discord.js doit alors résoudre l'ID via son cache local et lève `InvalidType` si l'utilisateur n'y est pas. Risque faible ici (l'ID vient d'un `UserSelectMenu` résolu dans la même interaction), mais la correction est triviale : `{ type: OverwriteType.Member }`.
-- **`reassignTicket`** a le même manque avec un ID relu du topic — risque réel, décrit en détail dans `docs/BUGFIX_REASSIGN_PERMISSIONS.md`, toujours non corrigé.
+- ~~**`reassignTicket`** a le même manque~~ — corrigé : la réassignation passe désormais par `applyTicketPermissions`, avec la même règle que l'acquisition (voir `docs/BUGFIX_REASSIGN_PERMISSIONS.md`).
 
 ## Vérification manuelle
 

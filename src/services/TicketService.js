@@ -360,8 +360,8 @@ class TicketService {
         await interaction.editReply({ content, components: [row] });
     }
 
-    // Acquisition : les accès des membres ne sont jamais retirés, ceux des rôles sont alignés
-    // sur un ticket créé par le panel.
+    // Acquisition et réassignation : les accès des membres ne sont jamais retirés, ceux des rôles
+    // sont alignés sur un ticket créé par le panel.
     // - `permissionOverwrites.edit` ne réécrit que la ligne de l'ID visé, contrairement à `set`
     //   qui remplace la liste entière du salon et éjecterait l'ouvreur et les membres ajoutés ;
     // - le refus `@everyone` de `buildTicketPermissionOverwrites` est volontairement écarté, et
@@ -635,40 +635,19 @@ class TicketService {
             });
         }
 
+        const reason = `Ticket réassigné par ${interaction.user.tag}`;
         if (isDiscordId(target.categoryId)) {
-            await interaction.channel.setParent(target.categoryId, {
-                lockPermissions: false,
-                reason: `Ticket réassigné par ${interaction.user.tag}`
-            });
+            await interaction.channel.setParent(target.categoryId, { lockPermissions: false, reason });
         }
 
-        const obsoleteStaffRoleIds = new Set(
-            this.client.config.tickets
-                .map(ticket => ticket.staffRoleId)
-                .filter(roleId => isDiscordId(roleId) && roleId !== target.staffRoleId)
+        // Même règle que l'acquisition : aucun membre n'est éjecté (propriétaire, membres ajoutés
+        // via « Ajouter »), les rôles sont alignés sur la nouvelle catégorie, `@everyone` n'est pas
+        // touché. Les accès sont donnés avant tout retrait : une erreur en cours de route ne peut
+        // plus laisser le salon sans personne dedans.
+        const { removedRoleIds } = await this.applyTicketPermissions(
+            interaction.channel, interaction, target, metadata.ownerId, reason
         );
-        for (const roleId of obsoleteStaffRoleIds) {
-            if (interaction.channel.permissionOverwrites.cache.has(roleId)) {
-                await interaction.channel.permissionOverwrites.delete(roleId).catch(() => undefined);
-            }
-        }
-
-        await interaction.channel.permissionOverwrites.edit(metadata.ownerId, {
-            ViewChannel: true,
-            SendMessages: true,
-            ReadMessageHistory: true,
-            AttachFiles: true,
-            EmbedLinks: true
-        });
-        await interaction.channel.permissionOverwrites.edit(target.staffRoleId, {
-            ViewChannel: true,
-            SendMessages: true,
-            ReadMessageHistory: true,
-            AttachFiles: true,
-            EmbedLinks: true,
-            ManageMessages: true
-        });
-        await interaction.channel.setTopic(this.buildTopic(metadata.ownerId, target.id));
+        await interaction.channel.setTopic(this.buildTopic(metadata.ownerId, target.id), reason);
 
         const embed = new EmbedBuilder()
             .setTitle('🔁 RÉASSIGNATION')
@@ -679,8 +658,12 @@ class TicketService {
             embeds: [embed],
             allowedMentions: { roles: [target.staffRoleId] }
         });
+        const removedRolesText = removedRoleIds.map(roleId => `<@&${roleId}>`).join(', ');
         await interaction.followUp({
-            content: '✅ Ticket réassigné avec succès.',
+            content: [
+                '✅ Ticket réassigné avec succès.',
+                removedRolesText ? `🧹 Accès retirés aux rôles : ${removedRolesText}.` : null
+            ].filter(Boolean).join('\n'),
             flags: MessageFlags.Ephemeral
         });
     }

@@ -34,7 +34,7 @@ Catégories disponibles par défaut (modifiables sans toucher au code, voir §4)
 Dans le salon, cinq boutons sont disponibles :
 
 - **Fermer** — génère un transcript du salon, l'archive, l'envoie dans le salon de logs de fermeture (si configuré), puis supprime le salon après quelques secondes.
-- **Réassigner** — déplace le ticket vers une autre catégorie/équipe (change le salon Discord parent et les permissions).
+- **Réassigner** — déplace le ticket vers une autre catégorie/équipe (change le salon Discord parent et les permissions). Les permissions suivent la même règle que `/acquire` : **aucun membre n'est éjecté** (propriétaire, membres ajoutés via ➕ Ajouter), la nouvelle équipe reçoit l'accès, **tout autre rôle perd le sien** (dont l'ancienne équipe), et `@everyone` n'est pas touché. Les rôles retirés sont listés dans la confirmation.
 - **Renommer** — change le nom du salon.
 - **➕ Ajouter** — ajoute jusqu'à 5 membres supplémentaires au salon.
 - **➖ Retirer** — retire des membres du salon (le propriétaire du ticket et le bot ne peuvent pas être retirés).

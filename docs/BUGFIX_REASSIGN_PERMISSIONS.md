@@ -1,5 +1,11 @@
 # Bug : `/réassigner` vide le ticket de tout accès
 
+> **Statut : corrigé.** `reassignTicket` passe désormais par `TicketService.applyTicketPermissions`,
+> la même méthode que `/acquire` : `type` explicite sur chaque `edit`, accès donnés **avant** tout
+> retrait, aucun membre éjecté, rôles alignés sur la nouvelle catégorie, `@everyone` intouché.
+> Voir « Correctif retenu » en fin de document ; la section « Correctif » ci-dessous est l'analyse
+> initiale, qui ne traitait que le `type`.
+
 ## Symptôme
 
 Après avoir cliqué sur **Réassigner** puis choisi une catégorie, le salon de ticket se retrouve sans accès pour personne (ni le propriétaire, ni l'ancienne équipe, ni la nouvelle) — seul le bot garde l'accès. Une erreur générique (« ❌ Une erreur inattendue est survenue. ») apparaît côté staff.
@@ -69,4 +75,16 @@ Avec `type` fourni explicitement, `upsert()` saute la résolution `guild.roles.r
 Le même risque (ID brut + pas de `type` explicite = dépendant du cache) existe partout ailleurs où le code appelle `permissionOverwrites.edit/create/set` avec un ID qui n'est pas garanti fraîchement en cache :
 
 - `TicketService.addUsersToTicket` / `removeUsersFromTicket` — risque plus faible, les ID viennent d'un `UserSelectMenu` résolu dans la même interaction.
-- `buildTicketPermissionOverwrites` (ouverture d'un ticket par le panel via `guild.channels.create`, et acquisition via `applyTicketPermissions`) : chaque entrée porte désormais un `type` explicite, repassé à `edit` lors d'une acquisition — le besoin de cache est levé sur ce chemin. Le `set` global de l'acquisition a disparu (voir `docs/BUGFIX_ACQUIRE_PERMISSIONS.md`).
+- `buildTicketPermissionOverwrites` (ouverture d'un ticket par le panel via `guild.channels.create`, puis acquisition et réassignation via `applyTicketPermissions`) : chaque entrée porte désormais un `type` explicite, repassé à `edit` — le besoin de cache est levé sur ce chemin. Le `set` global de l'acquisition a disparu (voir `docs/BUGFIX_ACQUIRE_PERMISSIONS.md`).
+
+## Correctif retenu
+
+Au-delà du `type` manquant, l'analyse ci-dessus montre un second défaut, d'ordre : l'ancienne boucle **supprimait l'ancienne équipe avant** de donner l'accès au propriétaire et à la nouvelle équipe. N'importe quelle erreur entre les deux laissait le salon vide.
+
+Plutôt que de rapiécer les deux `edit`, `reassignTicket` appelle maintenant `applyTicketPermissions(channel, interaction, target, metadata.ownerId, reason)`, qui règle les deux défauts d'un coup :
+
+1. trois `edit` avec `type` explicite (propriétaire, `staffRoleId` de la catégorie cible, bot) ;
+2. **puis** suppression des overwrites de rôles autres que `@everyone` et la nouvelle équipe — l'ancienne équipe en fait partie, comme avant, mais aussi tout rôle ajouté à la main ;
+3. aucun overwrite de membre n'est jamais supprimé : les membres ajoutés via ➕ Ajouter restent dans le ticket.
+
+Les rôles retirés sont listés dans la confirmation éphémère. Tests : `test/ticketReassign.test.js`, dont un qui simule l'échec de l'`edit` du propriétaire et vérifie que l'ancienne équipe a gardé son accès.
