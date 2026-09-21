@@ -10,7 +10,7 @@ module.exports = {
         .setDescription('Transformer ce salon en ticket géré par le bot (ou mettre à jour un ticket existant)')
         .addUserOption(option => option
             .setName('proprietaire')
-            .setDescription('Membre propriétaire du ticket (par défaut : le propriétaire actuel, sinon vous)')
+            .setDescription('Propriétaire du ticket (défaut : propriétaire actuel, sinon ouvreur déduit du salon, sinon vous)')
             .setRequired(false))
         .addBooleanOption(option => option
             .setName('silencieux')
@@ -39,7 +39,7 @@ module.exports = {
         }
         // Le propriétaire d'un ticket existant est conservé tel quel : son ID suffit, inutile de
         // le résoudre auprès de Discord (il a pu quitter le serveur depuis).
-        const ownerId = chosenOwner?.id ?? metadata?.ownerId ?? interaction.user.id;
+        const { ownerId, note: ownerNote } = client.services.tickets.resolveAcquireOwner(interaction, chosenOwner?.id, metadata);
 
         const silent = interaction.options.getBoolean('silencieux') ?? false;
 
@@ -53,11 +53,12 @@ module.exports = {
             if (ticketConfig) {
                 return client.services.tickets.acquireChannel(interaction, ticketConfig.id, ownerId, {
                     silent: true,
-                    deferred: true
+                    deferred: true,
+                    ownerNote
                 });
             }
         }
 
-        await client.services.tickets.showAcquireCategoryMenu(interaction, ownerId, { silent });
+        await client.services.tickets.showAcquireCategoryMenu(interaction, ownerId, { silent, ownerNote });
     }
 };

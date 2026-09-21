@@ -22,6 +22,7 @@ const { isDiscordId } = require('../utils/config');
 const { RenameLimiter, formatRenameLimitMessage } = require('../utils/renameLimiter');
 const { buildChannelName, getAssignmentConfig, splitChannelName } = require('../utils/ticketAssignment');
 const { findTicketControlsMessage } = require('../utils/ticketMessages');
+const { findObsoleteRoleOverwriteIds, findProbableOwnerId } = require('../utils/ticketPermissions');
 
 const OWNER_PERMISSIONS = [
     PermissionFlagsBits.ViewChannel,
@@ -303,8 +304,36 @@ class TicketService {
         return { ownerId: match[1], silent: Boolean(match[2]) };
     }
 
+    // Propriétaire d'un ticket acquis, par ordre de priorité : l'option `proprietaire`, le
+    // propriétaire actuel si le salon est déjà un ticket, l'ouvreur déduit des accès individuels
+    // du salon, et en dernier recours l'auteur de la commande. `note` annonce à l'auteur une
+    // déduction (ou son échec) pour qu'il puisse corriger : elle n'est jamais silencieuse.
+    resolveAcquireOwner(interaction, chosenOwnerId, metadata) {
+        if (chosenOwnerId) return { ownerId: chosenOwnerId, note: null };
+        if (metadata?.ownerId) return { ownerId: metadata.ownerId, note: null };
+
+        const overwrites = interaction.channel?.permissionOverwrites?.cache;
+        const excludedIds = [this.client.user.id, interaction.user.id];
+        for (const id of overwrites?.keys?.() ?? []) {
+            if (this.client.users?.cache?.get(id)?.bot) excludedIds.push(id);
+        }
+
+        const deducedOwnerId = findProbableOwnerId(overwrites, excludedIds);
+        if (deducedOwnerId) {
+            return {
+                ownerId: deducedOwnerId,
+                note: `ℹ️ Propriétaire déduit des accès du salon : <@${deducedOwnerId}>. Si ce n'est pas le bon, relancez \`/acquire proprietaire:@membre\`.`
+            };
+        }
+        return {
+            ownerId: interaction.user.id,
+            note: 'ℹ️ Impossible de déduire l\'ouvreur du salon (aucun ou plusieurs membres y ont un accès individuel) : vous êtes enregistré comme propriétaire. Pour corriger, relancez `/acquire proprietaire:@membre`.'
+        };
+    }
+
+    // `ownerNote` : explication de `resolveAcquireOwner`, affichée au-dessus du menu.
     async showAcquireCategoryMenu(interaction, ownerId, options = {}) {
-        const { silent = false } = options;
+        const { silent = false, ownerNote = null } = options;
         const menuOptions = this.client.config.tickets.map(ticket => {
             const option = {
                 label: ticket.label.slice(0, 100),
@@ -323,37 +352,54 @@ class TicketService {
         );
 
         // Le menu n'apparaît en mode silencieux que si la catégorie Discord du salon n'a pas permis de déduire la catégorie du ticket.
-        const content = silent
+        const prompt = silent
             ? `ℹ️ La catégorie Discord de ce salon ne correspond à aucune catégorie de ticket. Choisissez-la pour <@${ownerId}> :`
             : `Choisissez la catégorie du ticket pour <@${ownerId}> :`;
+        const content = [ownerNote, prompt].filter(Boolean).join('\n');
 
         await interaction.editReply({ content, components: [row] });
     }
 
-    // Applique les permissions d'un ticket sur un salon.
-    // `replace` : remplace toutes les permissions existantes (acquisition d'un salon quelconque).
-    // Sinon, seules celles du propriétaire, du staff et du bot sont réécrites, pour ne pas
-    // éjecter les membres ajoutés au ticket via le bouton « Ajouter ».
-    async applyTicketPermissions(channel, interaction, ticketConfig, ownerId, reason, { replace }) {
-        const overwrites = this.buildTicketPermissionOverwrites(interaction, ticketConfig, ownerId);
-        if (replace) {
-            await channel.permissionOverwrites.set(overwrites, reason);
-            return;
-        }
+    // Acquisition : les accès des membres ne sont jamais retirés, ceux des rôles sont alignés
+    // sur un ticket créé par le panel.
+    // - `permissionOverwrites.edit` ne réécrit que la ligne de l'ID visé, contrairement à `set`
+    //   qui remplace la liste entière du salon et éjecterait l'ouvreur et les membres ajoutés ;
+    // - le refus `@everyone` de `buildTicketPermissionOverwrites` est volontairement écarté, et
+    //   l'overwrite `@everyone` existant est conservé : y toucher changerait la visibilité du salon.
+    //   Un salon rangé dans la catégorie Discord du ticket est de toute façon déjà privé par
+    //   héritage de la catégorie ;
+    // - tout autre overwrite de rôle que le rôle staff de la catégorie est supprimé, **après**
+    //   les ajouts pour que le staff et le bot ne perdent jamais l'accès en cours de route.
+    //   Les overwrites de membres ne sont jamais supprimés.
+    // Retourne les rôles retirés, pour les annoncer au staff et dans le journal.
+    async applyTicketPermissions(channel, interaction, ticketConfig, ownerId, reason) {
+        const overwrites = this.buildTicketPermissionOverwrites(interaction, ticketConfig, ownerId)
+            .filter(overwrite => overwrite.id !== interaction.guild.id);
+
         for (const overwrite of overwrites) {
             await channel.permissionOverwrites.edit(overwrite.id, toPermissionOptions(overwrite), {
                 type: overwrite.type,
                 reason
             });
         }
+
+        const removedRoleIds = findObsoleteRoleOverwriteIds(channel.permissionOverwrites.cache, [
+            interaction.guild.id,
+            ticketConfig.staffRoleId
+        ]);
+        for (const roleId of removedRoleIds) {
+            await channel.permissionOverwrites.delete(roleId, reason);
+        }
+        return { removedRoleIds };
     }
 
     // `silent` : pas de menu de catégorie (déduite du salon) et message de ticket sans ping.
     // `deferred` : la réponse éphémère a déjà été différée par la commande appelante.
+    // `ownerNote` : explication de `resolveAcquireOwner`, ajoutée à la réponse finale.
     // Sur un salon déjà géré par le bot, l'acquisition devient une mise à jour : permissions,
     // topic et message à boutons sont réécrits au lieu d'être refusés.
     async acquireChannel(interaction, categoryId, ownerId, options = {}) {
-        const { silent = false, deferred = false } = options;
+        const { silent = false, deferred = false, ownerNote = null } = options;
 
         if (!canManageBot(interaction.member, this.client.config)) {
             return deferred
@@ -375,7 +421,8 @@ class TicketService {
         const reason = isUpdate
             ? `Ticket mis à jour par ${interaction.user.tag}`
             : `Salon acquis comme ticket par ${interaction.user.tag}`;
-        await this.applyTicketPermissions(channel, interaction, ticketConfig, ownerId, reason, { replace: !isUpdate });
+        const { removedRoleIds } = await this.applyTicketPermissions(channel, interaction, ticketConfig, ownerId, reason);
+        const removedRolesText = removedRoleIds.map(roleId => `<@&${roleId}>`).join(', ');
 
         // `setTopic` est limité par Discord : on ne l'appelle que si le topic change réellement.
         const topic = this.buildTopic(ownerId, ticketConfig.id);
@@ -393,6 +440,7 @@ class TicketService {
                 `Propriétaire : <@${ownerId}>`,
                 `Catégorie : **${ticketConfig.label}**`,
                 silent ? 'Mode : **silencieux**' : null,
+                removedRolesText ? `Accès retirés aux rôles : ${removedRolesText}` : null,
                 `Salon : ${channel}`
             ].filter(Boolean).join('\n'))
             .setTimestamp();
@@ -402,10 +450,14 @@ class TicketService {
             `**${isUpdate ? 'Mis à jour' : 'Acquis'} par :** ${acquiredByName}`
         ], { silent, reuseExisting: true });
 
-        if (isUpdate) {
-            return respond(`✅ Ticket **${ticketConfig.label}** mis à jour${reused ? '' : ' (aucun message à boutons trouvé : un nouveau a été posté)'}.`);
-        }
-        return respond(`✅ Salon acquis comme ticket **${ticketConfig.label}**${reused ? ' (message à boutons existant mis à jour)' : ''}.`);
+        const summary = isUpdate
+            ? `✅ Ticket **${ticketConfig.label}** mis à jour${reused ? '' : ' (aucun message à boutons trouvé : un nouveau a été posté)'}.`
+            : `✅ Salon acquis comme ticket **${ticketConfig.label}**${reused ? ' (message à boutons existant mis à jour)' : ''}.`;
+        return respond([
+            summary,
+            removedRolesText ? `🧹 Accès retirés aux rôles : ${removedRolesText}.` : null,
+            ownerNote
+        ].filter(Boolean).join('\n'));
     }
 
     async showArchitectureQuestionnaire(interaction) {

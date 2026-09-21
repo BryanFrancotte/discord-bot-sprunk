@@ -69,10 +69,22 @@ Seuls les membres du rôle architecte **ayant un emoji dans `assignment.architec
 Si un salon a été créé autrement que par le panel — manuellement, par un autre bot, ou avant l'installation de SPRUNK — il n'est pas reconnu comme un ticket : aucun des boutons ci-dessus ne fonctionne dessus. `/acquire` permet de le rattacher :
 
 1. Se placer dans le salon à convertir.
-2. Lancer `/acquire` — l'option `proprietaire` indique le membre considéré comme propriétaire du ticket ; **si elle est omise, c'est vous** (la personne qui tape la commande), ou le propriétaire actuel si le salon est déjà un ticket.
+2. Lancer `/acquire` — l'option `proprietaire` indique le membre considéré comme propriétaire du ticket. Si elle est omise :
+   - sur un salon déjà ticket, c'est son **propriétaire actuel** ;
+   - sinon, le bot cherche **l'ouvreur du salon** : si un seul membre (hors bots et hors vous) a un accès individuel au salon, c'est lui ;
+   - si personne ou plusieurs membres ont un tel accès, le bot ne devine pas et c'est **vous** qui êtes enregistré.
+
+   Dans les deux derniers cas, le bot vous l'annonce dans sa réponse (« Propriétaire déduit : @… » ou « Impossible de déduire l'ouvreur ») : si ce n'est pas le bon, relancez `/acquire proprietaire:@membre`.
 3. Choisir la catégorie dans le menu qui apparaît (les mêmes catégories que dans le panel).
 
-Le bot réinitialise alors les permissions du salon comme un ticket normal (propriétaire, rôle staff, bot), enregistre le sujet du salon pour que **Fermer / Réassigner / Renommer / Ajouter / Retirer** fonctionnent, poste le message de ticket avec ses boutons, et journalise l'acquisition dans le salon de logs.
+Le bot enregistre alors le sujet du salon pour que **Fermer / Réassigner / Renommer / Ajouter / Retirer** fonctionnent, poste le message de ticket avec ses boutons, et journalise l'acquisition dans le salon de logs.
+
+> **Permissions : les membres ne sont jamais éjectés, les rôles sont remis en ordre.**
+> - **Membres** : le propriétaire désigné et le bot reçoivent l'accès au salon s'ils ne l'avaient pas. Aucun accès individuel n'est retiré — l'ouvreur du salon et les membres ajoutés à la main ou via ➕ Ajouter gardent le leur.
+> - **Rôles** : le rôle staff de la catégorie reçoit l'accès, et **tout autre rôle qui avait une permission sur ce salon la perd** (ancien rôle staff d'une autre catégorie, rôle ajouté à la main…), pour que le salon corresponde à un ticket ouvert par le panel. Les rôles retirés sont listés dans la réponse du bot et dans le salon de logs.
+> - **`@everyone`** n'est pas touché : si le salon était visible par tout le monde, il le reste. Pour qu'un salon acquis soit privé comme un vrai ticket, rangez-le dans la catégorie Discord de la catégorie de tickets, qui s'en charge par héritage.
+>
+> Les administrateurs du serveur voient tous les salons quoi qu'il arrive : retirer un rôle ne les concerne pas.
 
 #### Rafraîchir un ticket déjà géré
 
@@ -80,7 +92,7 @@ Lancée dans un salon **déjà géré par le bot**, `/acquire` ne refuse plus : 
 
 - l'embed et les boutons du message de ticket sont **réécrits** avec le titre, la description et les boutons actuels de la catégorie ;
 - le propriétaire et la catégorie par défaut sont **ceux du ticket en cours** — ne renseignez `proprietaire` ou ne changez de catégorie que si vous voulez justement les modifier ;
-- les permissions du propriétaire, du rôle staff et du bot sont réappliquées, **sans éjecter** les membres ajoutés au ticket via ➕ Ajouter (contrairement à une première acquisition, qui remet les permissions du salon à zéro) ;
+- les permissions sont remises en ordre **exactement comme pour une première acquisition** : aucun membre éjecté, rôles alignés sur la catégorie (utile après un changement de catégorie : l'ancien rôle staff perd l'accès) ;
 - l'opération est journalisée sous le titre **♻️ TICKET MIS À JOUR**.
 
 Si aucun message à boutons du bot n'existe plus dans le salon, un nouveau est posté et le bot le signale.
@@ -89,11 +101,11 @@ Si aucun message à boutons du bot n'existe plus dans le salon, un nouveau est p
 
 `/acquire silencieux:true` acquiert le salon **sans aucune question** :
 
-- le propriétaire est la personne qui a tapé la commande (sauf si `proprietaire` est renseigné, ou si le salon est déjà un ticket : c'est alors son propriétaire actuel) ;
+- le propriétaire est choisi comme en mode normal (option `proprietaire`, sinon propriétaire actuel, sinon ouvreur déduit du salon, sinon vous), et la déduction est annoncée de la même façon ;
 - **aucun menu de catégorie** : la catégorie du ticket est celle du ticket en cours s'il y en a un, sinon elle est déduite de la catégorie Discord dans laquelle se trouve déjà le salon (le `categoryId` d'une des catégories de `config.json`). Le salon n'est pas déplacé ;
 - le message de ticket est posté **sans mentionner** le propriétaire ni le rôle staff, et sans notification.
 
-Si la catégorie Discord du salon ne correspond à aucune catégorie de `config.json`, le bot le signale et affiche le menu pour la choisir ; le reste du mode silencieux (pas de mention, pas de notification) reste appliqué. Les permissions sont réinitialisées et l'acquisition est journalisée comme pour une acquisition normale.
+Si la catégorie Discord du salon ne correspond à aucune catégorie de `config.json`, le bot le signale et affiche le menu pour la choisir ; le reste du mode silencieux (pas de mention, pas de notification) reste appliqué. Les permissions et la journalisation sont traitées comme pour une acquisition normale.
 
 #### Un seul message à boutons par salon
 
@@ -137,7 +149,7 @@ Les rappels sont automatiquement nettoyés (messages supprimés) quelques minute
 | Commande | Effet | Qui peut l'utiliser |
 |---|---|---|
 | `/distributeur` | Publie l'annonce standard d'installation d'un distributeur Sprunk dans le salon courant | Rôle `distributorRoleId`, administrateurs, ou rôle `reassignRoleId` |
-| `/acquire` | Transforme le salon courant en ticket géré par le bot, ou met à jour l'embed et les permissions d'un ticket existant ; `silencieux:true` acquiert sans menu ni mention (voir §1) | Administrateurs ou rôle `reassignRoleId` |
+| `/acquire` | Transforme le salon courant en ticket géré par le bot, ou met à jour l'embed d'un ticket existant ; n'éjecte aucun membre, aligne les rôles sur la catégorie ; `silencieux:true` acquiert sans menu ni mention (voir §1) | Administrateurs ou rôle `reassignRoleId` |
 | `/assigner` | Assigne le ticket courant à un architecte (voir §1) | Administrateurs ou rôle `reassignRoleId` pour n'importe quel architecte ; un architecte pour lui-même |
 | `/statut` | Indique si le Sprunk est ouvert ou fermé : renomme le salon de statut et met à jour son message (voir ci-dessous) | Administrateurs ou rôle `reassignRoleId` |
 | `/reglement` | Publie le règlement dans le salon courant, avec un bouton qui donne le rôle membre (voir ci-dessous) | Administrateurs |
