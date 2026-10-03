@@ -42,7 +42,7 @@ Règle de dépendance à retenir : **`events/` et `commands/` ne contiennent qua
 | `discordLogs` | Envoie un embed dans le salon de logs (`bot.logsChannelId`) | `services/DiscordLogService.js` |
 | `ticketLogs` | Persiste l'historique des tickets fermés (JSON, 500 max) | `services/TicketLogService.js` |
 | `tickets` | Tout le cycle de vie d'un ticket : panel, création, fermeture, transcript, réassignation | `services/TicketService.js` |
-| `missions` | Création de missions, gestion des réactions ✅/🟡 | `services/MissionService.js` |
+| `missions` | Création de missions (annonce + fil de détails), modification via le bouton `mission:edit`, gestion des réactions ✅/🟡 | `services/MissionService.js` |
 | `reminders` | Boucle périodique qui envoie les rappels 15 min / 5 min / maintenant | `services/ReminderService.js` |
 | `troll` | Envoi de messages privés limités, avec cooldown | `services/TrollService.js` |
 | `rules` | Publication du règlement et attribution du rôle membre via le bouton `rules:accept` | `services/RulesService.js` |
@@ -133,6 +133,15 @@ Les deux helpers purs correspondants sont dans `utils/ticketMessages.js` (testé
 
 `sendTicketChannelMessage(..., { silent, reuseExisting })` centralise l'envoi et retourne `{ message, reused }`. Avec `reuseExisting: true` (seul `acquireChannel` l'active), il édite le message existant au lieu d'en poster un second — Discord ne permettant pas d'insérer un message ailleurs qu'à la fin d'un salon, c'est la seule façon de garder un message à boutons unique et haut placé. Les créations de ticket ne l'activent pas : le salon vient d'être créé, la requête d'historique serait un appel API inutile.
 
+### Missions : fil de détails et modification
+
+L'embed d'une mission est toujours reconstruit depuis l'enregistrement de `data/missions.json` par `MissionService.buildEmbed(mission)` — à la création comme à la modification. La date affichée vient de `formatParisDate(timestamp)` (`utils/date.js`), l'inverse exact de `parseParisDate` : on ne stocke donc pas le texte saisi.
+
+- **Fil** : `create()` appelle `createDetailsThread` après les réactions et enregistre `threadId` (ou `null`). Un échec est loggué mais n'annule jamais la mission ; `create()` retourne `{ message, thread }` et `/mission` signale l'absence de fil.
+- **Modification** : bouton `mission:edit` → `showEditModal` (modal pré-rempli, 5 champs = maximum Discord) → modal `mission:edit-confirm:<messageId>` → `editMission`. L'ID du message est porté par le `customId` (voir section suivante). La permission (`canEditMission` : créateur, ou `canManageBot`) est revérifiée à la soumission.
+- La logique pure est dans `utils/missions.js`, testée dans `test/missions.test.js` : `parseMissionEdit` valide la saisie (une date inchangée est acceptée même passée) et `applyMissionEdit` applique les champs, retourne les libellés modifiés et **remet à `false` les drapeaux `reminded*`/`cleanedUp` si la date change** — sans quoi `ReminderService` ne renverrait aucun rappel pour la nouvelle heure. Les `notificationIds` sont conservés pour être nettoyés plus tard.
+- Le message du fil et son renommage passent **après** `editReply` : Discord peut mettre un renommage en attente (limite de 2 renommages / 10 min), il ne doit pas bloquer la réponse. Les erreurs y sont seulement logguées.
+
 ### Faire persister un choix entre deux interactions
 
 Une commande slash et le composant qu'elle affiche (menu, bouton) sont deux interactions Discord séparées — on ne peut pas garder une variable en mémoire entre les deux. Le patron du projet est d'encoder l'information dans le `customId` du composant plutôt que dans un état serveur.
@@ -200,7 +209,8 @@ Quand vous touchez à un service, ajoutez au minimum un test qui couvre la nouve
 - Comportement d'une commande → `src/commands/<nom>.js`, puis le service qu'elle appelle.
 - Format du topic d'un salon ticket (`sprunk-ticket|owner=...|category=...`) → `TicketService.buildTopic` / `parseTopic`.
 - Retrouver/déduire les éléments d'une acquisition (catégorie déduite du salon, message à boutons existant) → `utils/ticketMessages.js` ; rôles à retirer et ouvreur probable du salon → `utils/ticketPermissions.js`.
-- Calcul des dates Paris (heure d'été/hiver) → `utils/date.js`, testé dans `test/date.test.js`.
+- Calcul des dates Paris (heure d'été/hiver) → `utils/date.js` (`parseParisDate` / `formatParisDate`), testé dans `test/date.test.js`.
+- Validation et application d'une modification de mission, droits de modification → `utils/missions.js`.
 - Qui a le droit de faire quoi → `utils/permissions.js` + les champs `reassignRoleId` / `distributorRoleId` de `config.json`.
 - Visuels du panneau de statut → `assets/`, référencés par `status.<état>.image` dans `config.json` (chemin relatif à la racine du dépôt, ou URL `https://`). `StatusService.resolveImage` joint le fichier local (`attachment://`) ou passe l'URL telle quelle ; un fichier absent n'empêche pas la publication. Ces images sont versionnées et déployées avec le code, contrairement à `config.json`.
 - Pourquoi le panneau est republié au lieu d'être modifié → une modification de message ne déclenche aucune notification Discord ; `StatusService.updateStatus` republie donc le panneau (avec la mention de rôle) puis supprime l'ancien, qu'il n'identifie comme sien que s'il en est l'auteur **et** que le message porte un embed.

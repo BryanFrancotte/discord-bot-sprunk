@@ -49,3 +49,22 @@ test('enqueueReaction continue apres une tache en echec', async () => {
     assert.deepEqual(order, ['ok']);
     assert.equal(service.reactionQueues.size, 0);
 });
+
+test('l’embed et le bouton Modifier d’une mission sont construits depuis l’enregistrement', () => {
+    const service = new MissionService({ config: { bot: { color: '#00ff11', missionNotificationRoleId: '' } } }, {});
+    const embed = service.buildEmbed({
+        title: 'Convoi',
+        description: 'Escorter le camion',
+        location: 'Entrepôt',
+        timestamp: Date.parse('2027-07-15T19:00:00Z'),
+        maxParticipants: 0
+    }).toJSON();
+
+    assert.equal(embed.title, '📋 Mission : Convoi | STAFF');
+    assert.match(embed.description, /\*\*Date :\*\* 15\/07\/2027 21:00/);
+    assert.match(embed.description, /\*\*Places :\*\* Illimité/);
+    assert.doesNotMatch(embed.description, /Notification/);
+
+    const [row] = service.buildComponents().map(component => component.toJSON());
+    assert.equal(row.components[0].custom_id, 'mission:edit');
+});

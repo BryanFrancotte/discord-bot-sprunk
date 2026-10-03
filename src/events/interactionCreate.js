@@ -2,6 +2,7 @@
 
 const { Events } = require('discord.js');
 const { replyWithError } = require('../utils/async');
+const { MISSION_EDIT_CUSTOM_ID, parseEditConfirmCustomId } = require('../utils/missions');
 
 module.exports = function registerInteractionCreate(client) {
     client.on(Events.InteractionCreate, async interaction => {
@@ -32,6 +33,8 @@ module.exports = function registerInteractionCreate(client) {
                     await client.services.assignment.showStatusMenu(interaction);
                 } else if (interaction.customId === 'rules:accept') {
                     await client.services.rules.acceptRules(interaction);
+                } else if (interaction.customId === MISSION_EDIT_CUSTOM_ID) {
+                    await client.services.missions.showEditModal(interaction);
                 }
                 return;
             }
@@ -61,6 +64,9 @@ module.exports = function registerInteractionCreate(client) {
                     await client.services.tickets.renameTicket(interaction);
                 } else if (interaction.customId === 'ticket:architecture-confirm') {
                     await client.services.tickets.createArchitectureTicket(interaction);
+                } else {
+                    const missionId = parseEditConfirmCustomId(interaction.customId);
+                    if (missionId) await client.services.missions.editMission(interaction, missionId);
                 }
                 return;
             }

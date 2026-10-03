@@ -62,7 +62,7 @@ module.exports = {
             return interaction.editReply('❌ Salon de mission introuvable ou invalide.');
         }
 
-        const message = await client.services.missions.create({
+        const { message, thread } = await client.services.missions.create({
             guild: interaction.guild,
             channel,
             author: interaction.user,
@@ -70,12 +70,14 @@ module.exports = {
             description,
             location,
             targetDate,
-            dateText,
             maxParticipants
         });
 
+        const threadInfo = thread
+            ? `Ajoutez les détails dans le fil ${thread}.`
+            : '⚠️ Le fil de détails n’a pas pu être créé (permissions « Créer des fils publics » manquantes ?).';
         await interaction.editReply(
-            `✅ Mission créée dans ${channel} — [ouvrir le message](${message.url}) — ${maxParticipants || 'illimité'} place(s).`
+            `✅ Mission créée dans ${channel} — [ouvrir le message](${message.url}) — ${maxParticipants || 'illimité'} place(s).\n${threadInfo}`
         );
     }
 };

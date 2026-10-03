@@ -70,4 +70,10 @@ function parseParisDate(dateText) {
     return null;
 }
 
-module.exports = { parseParisDate };
+function formatParisDate(date) {
+    const parts = getParisParts(date);
+    const pad = value => String(value).padStart(2, '0');
+    return `${pad(parts.day)}/${pad(parts.month)}/${parts.year} ${pad(parts.hour)}:${pad(parts.minute)}`;
+}
+
+module.exports = { formatParisDate, parseParisDate };

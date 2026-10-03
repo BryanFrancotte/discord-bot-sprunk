@@ -128,6 +128,21 @@ Le bot publie une annonce dans le salon configuré (`bot.missionChannelId`, ou l
 - ✅ **Participer**
 - 🟡 **Réserve**
 
+### Le fil de détails
+
+Juste après la publication, le bot ouvre un **fil de discussion** sous l'annonce (nommé `📋 <titre>`) et y mentionne le créateur pour l'inviter à compléter la mission : équipement, consignes, répartition des rôles, plan d'action… Les participants peuvent y poser leurs questions. Le fil s'archive après une semaine d'inactivité et se rouvre dès qu'on y écrit.
+
+Si le fil ne peut pas être créé (salon qui n'accepte pas les fils, permission « Créer des fils publics » manquante pour le bot), la mission est quand même publiée et fonctionne normalement ; la réponse de `/mission` le signale.
+
+### Modifier une mission
+
+Le bouton **✏️ Modifier** sous l'annonce ouvre un formulaire pré-rempli avec le titre, la description, le lieu, la date et le nombre de places. Il est réservé au **créateur de la mission**, aux administrateurs et au rôle `reassignRoleId`.
+
+- L'annonce est mise à jour sur place (sans nouvelle notification) et le fil de détails indique qui a modifié quoi ; si le titre change, le fil est renommé.
+- **Date** : même format qu'à la création. Une nouvelle date doit être dans le futur ; une date inchangée est acceptée même si la mission a déjà commencé (pour corriger un lieu, par exemple). Changer la date **réarme les rappels** 15 min / 5 min / maintenant pour la nouvelle heure.
+- **Places** : vide ou `0` = illimité. Baisser la limite sous le nombre de participants déjà inscrits ne retire personne — le bot le signale, et seules les nouvelles inscriptions sont refusées.
+- Une mission n'est modifiable que tant que le bot la suit (jusqu'à `missions.retentionHours` après son heure). Les annonces publiées avant l'ajout de cette fonctionnalité n'ont ni bouton ni fil.
+
 ### Comment ça se comporte
 
 - Réagir avec ✅ retire automatiquement la réaction 🟡 si elle était posée (et inversement) — un membre est soit participant, soit en réserve, jamais les deux.
@@ -192,7 +207,7 @@ Ce fichier peut être modifié sans redémarrer le bot — un changement valide 
 | `guildId` | ID du serveur Discord où le bot opère |
 | `logsChannelId` | Salon où sont publiés les logs (ouverture/fermeture/renommage de ticket) |
 | `missionChannelId` | Salon par défaut des annonces de mission |
-| `reassignRoleId` | Rôle staff autorisé à gérer les tickets, créer des missions, utiliser `/troll` |
+| `reassignRoleId` | Rôle staff autorisé à gérer les tickets, créer et modifier des missions, utiliser `/troll` |
 | `distributorRoleId` | Rôle autorisé à utiliser `/distributeur` |
 | `color` | Couleur des embeds (code hexadécimal, ex. `#00ff11`) |
 | `footerText` | Texte affiché en pied des embeds |

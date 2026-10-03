@@ -49,6 +49,7 @@ Lors de l’invitation du bot, prévoyez au minimum :
 - Gérer les salons et leurs permissions ;
 - Gérer et lire l’historique des messages ;
 - Ajouter et gérer les réactions ;
+- Créer des fils publics et envoyer des messages dans les fils, pour le fil de détails de chaque mission ;
 - Intégrer des liens et joindre des fichiers ;
 - Gérer les rôles, pour attribuer le rôle membre depuis le bouton de `/reglement`.
 
@@ -58,7 +59,7 @@ Le rôle du bot doit être placé au-dessus des rôles qu’il doit mentionner o
 
 - `/template` : publie le panel de tickets, réservé aux administrateurs.
 - `!setup` : variante historique de `/template`, réservée aux administrateurs.
-- `/mission` : crée une mission et programme les rappels à 15 minutes, 5 minutes et au démarrage.
+- `/mission` : crée une mission et programme les rappels à 15 minutes, 5 minutes et au démarrage. Le bot ouvre un fil sous l’annonce pour que le créateur y ajoute les détails, et un bouton « Modifier » permet au créateur ou au staff de corriger la mission.
 - `/distributeur` : publie anonymement le message d’information configuré dans le code.
 - `/reglement` : publie le règlement dans le salon courant, avec un bouton « Lu et Approuvé » qui attribue le rôle membre (`rules.memberRoleId`). Réservé aux administrateurs.
 - `/troll` : envoie une série limitée de messages privés ; désactivée par défaut.
