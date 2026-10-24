@@ -47,6 +47,7 @@ Règle de dépendance à retenir : **`events/` et `commands/` ne contiennent qua
 | `troll` | Envoi de messages privés limités, avec cooldown | `services/TrollService.js` |
 | `rules` | Publication du règlement et attribution du rôle membre via le bouton `rules:accept` | `services/RulesService.js` |
 | `assignment` | Assignation d'un ticket à un architecte et statut du ticket, portés par les emojis de tête/fin du nom du salon (boutons `ticket:assign` / `ticket:status`, commande `/assigner`) | `services/TicketAssignmentService.js` |
+| `pictures` | Validation des photos postées dans les tickets à bloc `pictureValidation` : recopie dans un fil staff avec boutons `picture:approve` / `picture:reject`, décision renvoyée dans le ticket | `services/PictureValidationService.js` |
 | `status` | Panneau ouvert/fermé : renomme le salon `status.channelId`, publie le panneau (mention de rôle + image) et supprime le précédent | `services/StatusService.js` |
 
 Un service ne connaît que `client` et, si besoin, un `JsonStore` ou un autre service injecté au constructeur (voir `TicketService(client, ticketLogService, discordLogService)`). Il n'importe jamais directement `events/` ni `commands/`.
@@ -95,6 +96,16 @@ Une catégorie active l'assignation en déclarant un bloc `assignment` (pas de c
 - `resolveAssignee` / `canChangeStatus` — règles de permission (staff : tout architecte ; architecte : lui-même ; statut : staff ou `staffRoleId`).
 
 `TicketService` pose l'emoji « En attente » à la création, ajoute la rangée de boutons via `buildTicketComponents` (la rangée principale est déjà à 5 boutons, le maximum Discord), et conserve les emojis dans `renameTicket`. Tout renommage de ticket passe par `TicketService.renameChannel`, qui applique le `RenameLimiter` partagé (`utils/renameLimiter.js`, aussi utilisé par `StatusService`).
+
+### Validation des photos d'un ticket
+
+Comme l'assignation, la fonctionnalité est activée par un bloc de configuration (`pictureValidation: { threadId }`), jamais par l'`id` de la catégorie. `ConfigService.validatePictureValidation` exige un `threadId` Discord valide dès que le bloc est présent. La logique pure est dans `utils/pictureValidation.js`, testée dans `test/pictureValidation.test.js`.
+
+- **Entrée** : `events/messageCreate.js` appelle `pictures.submit(message)` pour tout message avec pièce jointe, avant le traitement de `!setup`, dans son propre `try/catch` (une erreur de validation ne doit pas faire taire `!setup`, et `messageCreate` n'a pas la gestion d'erreur centralisée d'`interactionCreate`). `resolveSubmission` fait tout le filtrage sans appel Discord : images (`isImageAttachment` : `contentType`, extension en repli), topic de ticket, catégorie avec bloc valide, auteur hors staff (`isPictureReviewer`).
+- **Fil** : les images sont ré-envoyées (`AttachmentBuilder(url)`) plutôt que liées, parce que les URL du CDN Discord sont signées et expirent, et que les fichiers disparaissent avec le salon à la fermeture. Si l'envoi échoue (fichier au-delà de la limite d'upload du bot), la demande est repostée avec les liens bruts.
+- **Pas d'état serveur** : salon et message du ticket voyagent dans le `customId` (`picture:<approve|reject|reject-confirm>:<channelId>:<messageId>`, voir « Faire persister un choix » ci-dessous), et la décision est portée par le message du fil lui-même (boutons retirés = traité). `decidingMessages` n'est qu'une déduplication des clics rapprochés, comme `closingTickets`.
+- **Droit de décider** : `canReviewPicturesInThread(member, config, threadId)` se base sur le **fil** où l'on clique, pas sur le ticket, qui peut déjà être supprimé — `canManageBot`, ou `staffRoleId` d'une catégorie dont le `threadId` est ce fil. Revérifié à la soumission du modal de refus.
+- **Ordre** : `decide` met d'abord à jour le message du fil (`interaction.update`, boutons retirés), puis prévient le ticket (`notifyTicket` : réponse au message d'origine avec `repliedUser: true`, ⏳ retiré, ✅/❌ ajouté). Un ticket fermé entre-temps n'empêche pas la décision ; un `followUp` éphémère le signale.
 
 ### Acquérir un salon existant (`/acquire`)
 
@@ -207,7 +218,7 @@ Quand vous touchez à un service, ajoutez au minimum un test qui couvre la nouve
 ## 9. Où trouver quoi
 
 - Comportement d'une commande → `src/commands/<nom>.js`, puis le service qu'elle appelle.
-- Format du topic d'un salon ticket (`sprunk-ticket|owner=...|category=...`) → `TicketService.buildTopic` / `parseTopic`.
+- Format du topic d'un salon ticket (`sprunk-ticket|owner=...|category=...`) → `TicketService.buildTopic` / `parseTopic`. `parseTopic` n'accepte que `[a-zA-Z0-9_-]` dans l'`id` de catégorie : un `id` accentué produit un ticket que le bot ne reconnaît plus.
 - Retrouver/déduire les éléments d'une acquisition (catégorie déduite du salon, message à boutons existant) → `utils/ticketMessages.js` ; rôles à retirer et ouvreur probable du salon → `utils/ticketPermissions.js`.
 - Calcul des dates Paris (heure d'été/hiver) → `utils/date.js` (`parseParisDate` / `formatParisDate`), testé dans `test/date.test.js`.
 - Validation et application d'une modification de mission, droits de modification → `utils/missions.js`.

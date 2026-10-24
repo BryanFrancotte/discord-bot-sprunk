@@ -49,7 +49,7 @@ Lors de l’invitation du bot, prévoyez au minimum :
 - Gérer les salons et leurs permissions ;
 - Gérer et lire l’historique des messages ;
 - Ajouter et gérer les réactions ;
-- Créer des fils publics et envoyer des messages dans les fils, pour le fil de détails de chaque mission ;
+- Créer des fils publics et envoyer des messages dans les fils, pour le fil de détails de chaque mission et pour le fil de validation des photos des tickets Événement (si ce fil est privé, ajoutez-y le bot) ;
 - Intégrer des liens et joindre des fichiers ;
 - Gérer les rôles, pour attribuer le rôle membre depuis le bouton de `/reglement`.
 
@@ -104,6 +104,8 @@ Les données sont créées automatiquement dans `data/missions.json` et `data/ti
 ## Tickets
 
 Chaque catégorie de `config.json` définit son nom, sa catégorie Discord et son rôle staff. L’ID du propriétaire et la catégorie logique sont inscrits dans le topic du salon. Cela permet de préserver l’accès du créateur pendant une réassignation.
+
+Une catégorie peut déclarer `pictureValidation.threadId` (c’est le cas de « 🎉 Événement » dans `config.example.json`) : chaque image postée par le membre est alors recopiée dans ce fil avec des boutons Valider / Refuser, et la décision du staff lui est renvoyée dans son ticket. Voir `docs/USER_GUIDE.md`.
 
 À la fermeture :
 

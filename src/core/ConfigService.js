@@ -78,6 +78,7 @@ class ConfigService {
             }
             ids.add(ticket.id);
             if (ticket.assignment !== undefined) this.validateAssignment(ticket);
+            if (ticket.pictureValidation !== undefined) this.validatePictureValidation(ticket);
         }
     }
 
@@ -109,6 +110,17 @@ class ConfigService {
             if (status?.emoji !== undefined && (typeof status.emoji !== 'string' || !status.emoji.trim())) {
                 throw new Error(`${prefix}.statuses.${key}.emoji doit être un emoji non vide.`);
             }
+        }
+    }
+
+    validatePictureValidation(ticket) {
+        const { pictureValidation } = ticket;
+        const prefix = `tickets[${ticket.id}].pictureValidation`;
+        if (!pictureValidation || typeof pictureValidation !== 'object' || Array.isArray(pictureValidation)) {
+            throw new Error(`${prefix} doit être un objet.`);
+        }
+        if (!/^\d{17,20}$/.test(pictureValidation.threadId ?? '')) {
+            throw new Error(`${prefix}.threadId doit être l’ID Discord du fil de validation.`);
         }
     }
 

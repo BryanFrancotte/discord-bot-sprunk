@@ -3,6 +3,7 @@
 const { Events } = require('discord.js');
 const { replyWithError } = require('../utils/async');
 const { MISSION_EDIT_CUSTOM_ID, parseEditConfirmCustomId } = require('../utils/missions');
+const { parsePictureCustomId } = require('../utils/pictureValidation');
 
 module.exports = function registerInteractionCreate(client) {
     client.on(Events.InteractionCreate, async interaction => {
@@ -35,6 +36,13 @@ module.exports = function registerInteractionCreate(client) {
                     await client.services.rules.acceptRules(interaction);
                 } else if (interaction.customId === MISSION_EDIT_CUSTOM_ID) {
                     await client.services.missions.showEditModal(interaction);
+                } else {
+                    const picture = parsePictureCustomId(interaction.customId);
+                    if (picture?.action === 'approve') {
+                        await client.services.pictures.approve(interaction, picture);
+                    } else if (picture?.action === 'reject') {
+                        await client.services.pictures.showRejectModal(interaction, picture);
+                    }
                 }
                 return;
             }
@@ -65,8 +73,13 @@ module.exports = function registerInteractionCreate(client) {
                 } else if (interaction.customId === 'ticket:architecture-confirm') {
                     await client.services.tickets.createArchitectureTicket(interaction);
                 } else {
+                    const picture = parsePictureCustomId(interaction.customId);
                     const missionId = parseEditConfirmCustomId(interaction.customId);
-                    if (missionId) await client.services.missions.editMission(interaction, missionId);
+                    if (picture?.action === 'reject-confirm') {
+                        await client.services.pictures.reject(interaction, picture);
+                    } else if (missionId) {
+                        await client.services.missions.editMission(interaction, missionId);
+                    }
                 }
                 return;
             }

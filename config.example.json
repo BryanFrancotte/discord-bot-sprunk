@@ -34,6 +34,20 @@
       "waitMessage": "Veuillez décrire votre demande en attendant une réponse."
     },
     {
+      "id": "evenement",
+      "label": "🎉 Événement",
+      "emoji": "🎉",
+      "categoryId": "000000000000000000",
+      "staffRoleId": "000000000000000000",
+      "title": "🎉 Sprunk | Événement",
+      "description": "Bonjour {user}, postez ici vos photos : chacune sera vérifiée par le staff.",
+      "details": "Participer à un événement et envoyer vos photos.",
+      "waitMessage": "Veuillez décrire votre demande en attendant une réponse.",
+      "pictureValidation": {
+        "threadId": "000000000000000000"
+      }
+    },
+    {
       "id": "architecture",
       "label": "🔨 Architecture",
       "emoji": "🔨",

@@ -28,6 +28,7 @@ Catégories disponibles par défaut (modifiables sans toucher au code, voir §4)
 | 💼 Postuler au Sprunk | Salon de candidature |
 | 🍋 Réservation | Salon de demande de réservation |
 | 🔨 Architecture | Ouvre d'abord un petit formulaire (type de projet, date de l'événement, nombre de partenaires) avant de créer le salon |
+| 🎉 Événement | Salon rangé dans la catégorie Discord des événements ; chaque photo postée par le membre est soumise à la validation du staff (voir ci-dessous) |
 
 ### Gérer un ticket ouvert (côté staff)
 
@@ -63,6 +64,28 @@ Exemple : `ticket-bob-architecture-⚪` (nouveau, en attente) → assigné à l'
 - **Renommer** conserve les emojis d'architecte et de statut sur ces tickets.
 
 Seuls les membres du rôle architecte **ayant un emoji dans `assignment.architects`** peuvent être assignés. Comme pour `/statut`, Discord n'autorise que **2 renommages d'un même salon par tranche de 10 minutes** (assignation, statut et « Renommer » confondus) : au-delà, le bot indique dans combien de minutes réessayer et ne modifie rien.
+
+### Validation des photos (tickets 🎉 Événement)
+
+Les tickets **🎉 Événement** (et toute catégorie qui déclare un bloc `pictureValidation`, voir §4) font valider par le staff chaque photo envoyée par le membre :
+
+1. Le membre poste une ou plusieurs images dans son ticket. Le bot ajoute la réaction ⏳ sur son message.
+2. Le bot recopie les images dans **le fil de validation** (un fil unique, partagé par tous les tickets de la catégorie), avec le membre, un lien vers le ticket et vers le message, et deux boutons **✅ Valider** / **❌ Refuser**.
+3. Un membre du staff clique :
+   - **Valider** — le fil passe en vert « PHOTO VALIDÉE par … » ;
+   - **Refuser** — un formulaire demande un motif (facultatif, visible par le membre), puis le fil passe en rouge « PHOTO REFUSÉE ».
+4. Le bot répond au message du membre dans le ticket (« Votre photo a été validée / refusée par … », avec le motif), ce qui le notifie, et remplace ⏳ par ✅ ou ❌.
+
+Bon à savoir :
+
+- Un message avec plusieurs images forme **une seule demande** : la décision vaut pour toutes ses images. Pour valider des photos séparément, le membre les envoie dans des messages séparés.
+- Les images postées par le **staff de la catégorie** (rôle `staffRoleId`), les administrateurs et le rôle `reassignRoleId` ne partent pas en validation. Celles d'un membre ajouté via ➕ Ajouter, oui.
+- Seuls ces mêmes membres du staff peuvent cliquer sur Valider / Refuser. Une demande ne peut être tranchée qu'une fois : les boutons disparaissent dès la première décision.
+- Les images sont **recopiées** dans le fil : elles restent consultables après la fermeture du ticket. Une image trop lourde pour être ré-envoyée par le bot est remplacée par son lien (qui, lui, expire au bout de quelques heures et disparaît à la fermeture du ticket).
+- Une décision prise après la fermeture du ticket est enregistrée dans le fil, mais le membre ne peut plus être prévenu : le bot le signale à la personne qui a cliqué.
+- Si le fil est introuvable (supprimé, mauvais ID, bot sans accès), la photo n'est pas transmise et le bot l'indique dans le salon de logs.
+
+Le fil doit se trouver dans un salon réservé au staff. Si c'est un **fil privé**, ajoutez-y le bot (mentionnez-le dans le fil), sinon il ne pourra pas y écrire.
 
 ### Transformer un salon existant en ticket (`/acquire`)
 
@@ -215,7 +238,7 @@ Ce fichier peut être modifié sans redémarrer le bot — un changement valide 
 
 ### Section `tickets`
 
-Un tableau, une entrée par catégorie de ticket. Chaque entrée a besoin au minimum de `id`, `label`, `title`, `description` ; `categoryId` (catégorie Discord où créer le salon) et `staffRoleId` (rôle qui aura accès) sont fortement recommandés. `{user}` dans `description` est remplacé par une mention du membre. Ajouter ou retirer une catégorie ne demande aucune modification de code — sauf pour la catégorie `architecture`, qui a un comportement spécial câblé par son `id`.
+Un tableau, une entrée par catégorie de ticket. Chaque entrée a besoin au minimum de `id`, `label`, `title`, `description` ; `categoryId` (catégorie Discord où créer le salon) et `staffRoleId` (rôle qui aura accès) sont fortement recommandés. `{user}` dans `description` est remplacé par une mention du membre. Ajouter ou retirer une catégorie ne demande aucune modification de code — sauf pour la catégorie `architecture`, qui a un comportement spécial câblé par son `id`. Utilisez pour `id` uniquement des lettres sans accent, chiffres, `-` et `_` (ex. `evenement`, pas `événement`) : c'est la valeur inscrite dans le sujet du salon, et le bot ne reconnaît pas un ticket dont l'`id` contient un accent.
 
 **Assignation (`assignment`)** — facultatif, par catégorie. Sa présence active les boutons Assigner / Statut et la commande `/assigner` pour cette catégorie (voir §1) :
 
@@ -233,6 +256,25 @@ Un tableau, une entrée par catégorie de ticket. Chaque entrée a besoin au min
 
 - `architects` — ID Discord de chaque architecte → son emoji. Les architectes doivent aussi avoir le `staffRoleId` de la catégorie.
 - `statuses` — facultatif ; seules ces quatre clés sont acceptées, et un label ou un emoji absent reprend la valeur par défaut ci-dessus.
+
+**Validation des photos (`pictureValidation`)** — facultatif, par catégorie. Sa présence envoie chaque photo du membre en validation dans le fil indiqué (voir §1) :
+
+```json
+{
+  "id": "evenement",
+  "label": "🎉 Événement",
+  "emoji": "🎉",
+  "categoryId": "ID de la catégorie Discord des événements",
+  "staffRoleId": "ID du rôle qui valide les photos",
+  "title": "🎉 Sprunk | Événement",
+  "description": "Bonjour {user}, postez ici vos photos : chacune sera vérifiée par le staff.",
+  "details": "Participer à un événement et envoyer vos photos.",
+  "pictureValidation": { "threadId": "ID du fil de validation" }
+}
+```
+
+- `threadId` — ID du fil (clic droit sur le fil → « Copier l'identifiant », mode développeur activé). Obligatoire dès que le bloc est présent : un ID invalide fait refuser la configuration.
+- Le bot doit pouvoir **voir le fil, y envoyer des messages et joindre des fichiers**.
 
 ### Section `missions`
 
@@ -316,4 +358,6 @@ Un tableau, une entrée par catégorie de ticket. Chaque entrée a besoin au min
 - **Assigner / Statut / Renommer répond « ⏳ … réessayez dans X min »** — le ticket a déjà été renommé 2 fois dans les 10 dernières minutes (limite Discord). Attendre le délai indiqué.
 - **`/statut` répond « ⏳ … réessayez dans X min »** — le salon de statut a déjà été renommé 2 fois dans les 10 dernières minutes (limite Discord). Attendre le délai indiqué.
 - **Le bouton « Lu et Approuvé » n'attribue pas le rôle** — soit `rules.memberRoleId` n'est pas renseigné dans `config.json`, soit le rôle du bot est placé sous le rôle membre (ou il lui manque « Gérer les rôles »). Le message affiché au clic indique lequel des deux.
+- **Une photo de ticket Événement ne reçoit pas ⏳** — soit elle a été postée par un membre du staff (pas de validation, c'est voulu), soit le fil de validation est inaccessible : le salon de logs affiche alors « ⚠️ VALIDATION PHOTO IMPOSSIBLE ». Vérifiez `pictureValidation.threadId` et que le bot peut écrire dans le fil (et en est membre s'il est privé).
+- **Valider / Refuser répond « Non autorisé »** — seuls les administrateurs, le rôle `reassignRoleId` et le `staffRoleId` d'une catégorie qui utilise ce fil peuvent décider.
 - **`/statut` reste longtemps sur « réfléchit… »** — le salon a été renommé récemment en dehors du bot (à la main, ou juste avant un redémarrage du bot) : Discord fait patienter le renommage jusqu'à 10 minutes, puis la commande aboutit d'elle-même.
